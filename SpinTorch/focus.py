@@ -53,7 +53,7 @@ for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
 model = spintorch.MMSolver(geom, dt, [src], probes)
 
-dev = torch.device('cuda')  # 'cuda' or 'cpu'
+dev = torch.device('cpu')  # 'cuda' or 'cpu'
 print('Running on', dev)
 model.to(dev)   # sending model to GPU/CPU
 
@@ -66,7 +66,7 @@ INPUTS = X  # here we could cat multiple inputs
 OUTPUTS = torch.tensor([int(Np/2)]).to(dev) # desired output
 
 '''Define optimizer and lossfunction'''
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
 
 def my_loss(output, target_index):
     target_value = output[:,target_index]

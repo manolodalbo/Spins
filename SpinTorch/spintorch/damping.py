@@ -16,8 +16,7 @@ class Damping(nn.Module):
         for i in range(self.region_width):
             x, y = rectangle_perimeter((i+1, i+1), (self.dim[0]-i-2, self.dim[1]-i-2))
             A[:, :, x, y] = (1-i/self.region_width)**2*(self.alpha_max-self.alpha) + self.alpha
-            
-        self.register_buffer("Alpha", A)
+        self.register_parameter("Alpha", nn.Parameter(A))
 
     def forward(self, relax=False):
         if relax:

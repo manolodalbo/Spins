@@ -44,7 +44,8 @@ class WaveGeometryMs(WaveGeometry):
 
         super().__init__(dim, d, B0, Ms)
 
-        self.rho = nn.Parameter(ones(dim))
+        # self.rho = nn.Parameter(ones(dim)) # this is the only trainable parameter usually
+        self.register_buffer("rho",ones(dim))
         self.register_buffer("Msat", zeros(dim))
         self.register_buffer("B0", tensor(B0))
         self.register_buffer("B", zeros((3,)+dim))
