@@ -11,9 +11,9 @@ class WaveSource(torch.nn.Module):
         self.register_buffer('dim', torch.tensor(dim, dtype=torch.int32))
 
     def forward(self, B, Bt):
-        B = B.clone()
-        B[self.dim, self.x, self.y] = B[self.dim, self.x, self.y] + Bt
-        return B
+        Bs = B.clone()
+        Bs[:,self.dim, self.x, self.y] = Bs[:,self.dim, self.x, self.y] + Bt.unsqueeze(-1)
+        return Bs
 
     def coordinates(self):
         return self.x.cpu().numpy(), self.y.cpu().numpy()

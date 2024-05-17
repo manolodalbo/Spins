@@ -19,7 +19,7 @@ class MMSolver(nn.Module):
     gamma_LL = 1.7595e11    # gyromagnetic ratio (rad/Ts)
     relax_timesteps = 100
     retain_history = False
-    def __init__(self, geometry, dt: float, sources=[], probes=[]):
+    def __init__(self, geometry, dt: float, batch_size:int,sources=[], probes=[]):
         super().__init__()
 
         self.register_buffer("dt", tensor(dt))               # timestep (s)
@@ -32,14 +32,16 @@ class MMSolver(nn.Module):
         self.Alpha = Damping(self.geom.dim)
         self.torque_SOT = SOT(self.geom.dim)
         SOT.gamma_LL = self.gamma_LL
-
-        m0 = zeros((1, 3,) + self.geom.dim)
+        self.batch_size = batch_size
+        m0 = zeros((self.batch_size, 3,) + self.geom.dim)
         m0[:, 1,] =  1     # set initial magnetization in y direction
         self.m_history = []
         self.register_buffer("m0", m0)
         self.fwd = False  # differentiates main fwd pass and checpointing runs
 
     def forward(self, signal):
+        print(signal.shape)
+        #singal should be of shape batch_size by time_steps by 1
         self.m_history = []
         self.fwd = True
         if isinstance(self.geom, WaveGeometryMs):
@@ -48,18 +50,33 @@ class MMSolver(nn.Module):
         else:
             B_ext = self.geom()
             Msat = self.geom.Ms
-
+        B_ext = B_ext.unsqueeze(0)
+        B_ext = B_ext.expand(self.batch_size,-1,-1,-1)
         self.relax(B_ext, Msat) # relax magnetization and store in m0 (no gradients)
         outputs = self.run(self.m0, B_ext, Msat, signal) # run the simulation
         self.fwd = False
-        return cat(outputs, dim=1)
+        print(len(outputs))
+        print(outputs[0].shape)
+        concatted = cat(outputs,dim=1)
+        sum_for_each_probe = concatted.sum(dim=1)
+        print(sum_for_each_probe.shape)
+        return sum_for_each_probe
 
     def run(self, m, B_ext, Msat, signal):
         """Run the simulation in multiple stages for checkpointing"""
+        # this essentially loops through the 
         outputs = []
-        N = int(np.sqrt(signal.size()[1])) # number of stages 
-        for stage, sig in enumerate(signal.chunk(N, dim=1)):
+        N = int(np.sqrt(signal.size()[1])) # number of stages
+        chunked = signal.chunk(N,dim=1)
+        #this splits up the signal into smaller chunks. Effectively dividing into N different groups
+        #corresponding to the time steps
+
+        for stage, sig in enumerate(chunked):
+            print("printing shape of sig for run_stage")
+            print(sig.shape)
             output, m = checkpoint(self.run_stage, m, B_ext, Msat, sig,use_reentrant=False)
+            print("output of run_stage shape")
+            print(output.shape)
             outputs.append(output)
         return outputs
         
@@ -68,6 +85,7 @@ class MMSolver(nn.Module):
         outputs = empty(0,device=self.dt.device)
         # Loop through the signal 
         for sig in signal.split(1,dim=1):
+
             B_ext = self.inject_sources(B_ext, sig)
             # Propagate the fields (with checkpointing to save memory)
             m = checkpoint(self.rk4_step_LLG, m, B_ext, Msat,use_reentrant=False)
@@ -78,17 +96,28 @@ class MMSolver(nn.Module):
         return outputs, m
         
     def inject_sources(self, B_ext, sig): 
-        """Add the excitation signal components to B_ext"""
+        """Add the excitation signal components to B_ext
+        Called in run_stage for every loop through the signal
+        """
         for i, src in enumerate(self.sources):
-            B_ext = src(B_ext, sig[0,0,i])
+            B_ext = src(B_ext, sig[:,0,i]) # changed this to be compattible with different batch sizes.
         return B_ext
 
     def measure_probes(self, m, Msat, outputs): 
-        """Extract outputs and concatenate to previous values"""
-        probe_values = []
+        """Extract outputs and concatenate to previous values
+        Should return outputs of shape batch_size X 
+        """
+
+        probe_values = [] #number of probes by bath size
         for probe in self.probes:
             probe_values.append(probe((m-self.m0)*Msat))
-        outputs = cat([outputs, cat(probe_values).unsqueeze(0).unsqueeze(0)], dim=1)
+        print("first probe values")
+        print(probe_values)
+        probe_values = tensor(probe_values).transpose(0,1)
+        print("second probe values")
+        print(probe_values)
+        outputs = cat([outputs,probe], dim=1)
+        print(outputs.shape)
         return outputs
         
     def relax(self, B_ext, Msat): 

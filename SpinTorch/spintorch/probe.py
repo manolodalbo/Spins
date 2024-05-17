@@ -28,4 +28,4 @@ class WaveIntensityProbeDisk(WaveProbe):
 		super().__init__(x, y)
 
 	def forward(self, m):
-		return super().forward(m).sum().pow(2).unsqueeze(0)
+		return super().forward(m).sum(dim=1).pow(2)
