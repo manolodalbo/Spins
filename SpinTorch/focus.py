@@ -50,6 +50,7 @@ if not os.path.isdir(savedir):
 geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
 src = spintorch.WaveLineSource(10, 0, 10, ny-1, dim=2)
 probes = []
+epochs = 20
 Np = 3  # number of probes
 for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
@@ -68,18 +69,13 @@ X3 = Bt*torch.sin(2*np.pi*f3*t)
 
 INPUTS = torch.cat((X1,X2,X3),dim=0)  # here we could cat multiple inputs
 # INPUTS = Bt*torch.sin(2*np.pi*f1*t) # here we could cat multiple inputs
-OUTPUTS = torch.tensor(np.array([0,1,2])).to(dev) # desired output
+OUTPUTS = torch.tensor(np.array([0,1,2]),dtype=torch.long).to(dev) # desired output
 
 '''Define optimizer and lossfunction'''
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 def my_loss(output, target_index):
-    print(output)
-    print(target_index)
-    target_value = output[:,target_index]
-    loss = output.sum(dim=1)/target_value-1
-    return (loss.sum()/loss.size()[0]).log10()
-
+    output = output/(output.sum(dim=-1)) 
+    return torch.nn.functional.nll_loss(output,target_index)
 '''Load checkpoint'''
 epoch = epoch_init = -1 # select previous checkpoint (-1 = don't use checkpoint)
 if epoch_init>=0:
@@ -94,9 +90,11 @@ else:
 '''Train the network'''
 tic()
 model.retain_history = True
-for epoch in range(epoch_init+1, 10):
+for epoch in range(epoch_init+1, epochs):
     optimizer.zero_grad()
     u = model(INPUTS)
+    print("output: ")
+    print(u)
     loss = my_loss(u,OUTPUTS)
     loss_iter.append(loss.item())  # store loss values
     spintorch.plot.plot_loss(loss_iter, plotdir)

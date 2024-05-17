@@ -40,7 +40,6 @@ class MMSolver(nn.Module):
         self.fwd = False  # differentiates main fwd pass and checpointing runs
 
     def forward(self, signal):
-        print(signal.shape)
         #singal should be of shape batch_size by time_steps by 1
         self.m_history = []
         self.fwd = True
@@ -55,12 +54,9 @@ class MMSolver(nn.Module):
         self.relax(B_ext, Msat) # relax magnetization and store in m0 (no gradients)
         outputs = self.run(self.m0, B_ext, Msat, signal) # run the simulation
         self.fwd = False
-        print(len(outputs))
-        print(outputs[0].shape)
-        concatted = cat(outputs,dim=1)
-        sum_for_each_probe = concatted.sum(dim=1)
-        print(sum_for_each_probe.shape)
-        return sum_for_each_probe
+        concatted = cat(outputs,dim=-1)
+        sum_for_each_probe = concatted.sum(dim=-1)
+        return sum_for_each_probe #returns batch_size X number of probes.
 
     def run(self, m, B_ext, Msat, signal):
         """Run the simulation in multiple stages for checkpointing"""
@@ -72,11 +68,7 @@ class MMSolver(nn.Module):
         #corresponding to the time steps
 
         for stage, sig in enumerate(chunked):
-            print("printing shape of sig for run_stage")
-            print(sig.shape)
             output, m = checkpoint(self.run_stage, m, B_ext, Msat, sig,use_reentrant=False)
-            print("output of run_stage shape")
-            print(output.shape)
             outputs.append(output)
         return outputs
         
@@ -105,19 +97,14 @@ class MMSolver(nn.Module):
 
     def measure_probes(self, m, Msat, outputs): 
         """Extract outputs and concatenate to previous values
-        Should return outputs of shape batch_size X 
+        Should return outputs of shape batch_size X number_of_probes X number of measurements
         """
 
         probe_values = [] #number of probes by bath size
         for probe in self.probes:
             probe_values.append(probe((m-self.m0)*Msat))
-        print("first probe values")
-        print(probe_values)
-        probe_values = tensor(probe_values).transpose(0,1)
-        print("second probe values")
-        print(probe_values)
-        outputs = cat([outputs,probe], dim=1)
-        print(outputs.shape)
+        probe_values = torch.stack(probe_values,dim=1).unsqueeze(-1)
+        outputs = cat([outputs,probe_values], dim=2)
         return outputs
         
     def relax(self, B_ext, Msat): 
