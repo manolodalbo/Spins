@@ -5,7 +5,6 @@ import spintorch
 import numpy as np
 from spintorch.utils import tic, toc, stat_cuda
 from spintorch.plot import wave_integrated, wave_snapshot
-import matplotlib.pyplot as plt
 
 import warnings
 warnings.filterwarnings("ignore", message=".*Casting complex values to real.*")
@@ -27,7 +26,6 @@ f1 = 4e9        # source frequency (Hz)
 f2 = 3.5e9
 f3 = 3e9
 timesteps = 600 # number of timesteps for wave propagation
-learning_rate = 0.005
 
 
 '''Directories'''
@@ -53,7 +51,7 @@ geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
 src = spintorch.WaveLineSource(10, 0, 10, ny-1, dim=2)
 probes = []
 epochs = 20
-Np = 3  # number of probes
+Np = 2  # number of probes
 for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
 model = spintorch.MMSolver(geom, dt, 3, [src], probes)
@@ -67,13 +65,14 @@ model.to(dev)   # sending model to GPU/CPU
 t = torch.arange(0, timesteps*dt, dt, device=dev).unsqueeze(0).unsqueeze(2) # time vector
 X1 = Bt*torch.sin(2*np.pi*f1*t)  # sinusoid signal at f1 frequency, Bt amplitude
 X2 = Bt*torch.sin(2*np.pi*f2*t)
-X3 = Bt*torch.sin(2*np.pi*f3*t)
-INPUTS = torch.cat((X1,X2,X3),dim=0)  # here we could cat multiple inputs
+X3 = X1+X2
+
+INPUTS = torch.cat((X1,X2,X3),dim=0).to(dev)  # here we could cat multiple inputs
 # INPUTS = Bt*torch.sin(2*np.pi*f1*t) # here we could cat multiple inputs
-OUTPUTS = torch.tensor(np.array([0,1,2]),dtype=torch.long).to(dev) # desired output
+OUTPUTS = torch.tensor(np.array([0,0,1]),dtype=torch.long).to(dev) # desired output
 
 '''Define optimizer and lossfunction'''
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 def my_loss(output, target_index):
     output = output/(output.sum(dim=-1).unsqueeze(-1))
     return torch.nn.functional.cross_entropy(output,target_index)
