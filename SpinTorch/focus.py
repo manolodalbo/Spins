@@ -5,6 +5,7 @@ import spintorch
 import numpy as np
 from spintorch.utils import tic, toc, stat_cuda
 from spintorch.plot import wave_integrated, wave_snapshot
+import matplotlib.pyplot as plt
 
 import warnings
 warnings.filterwarnings("ignore", message=".*Casting complex values to real.*")
@@ -26,6 +27,7 @@ f1 = 4e9        # source frequency (Hz)
 f2 = 3.5e9
 f3 = 3e9
 timesteps = 600 # number of timesteps for wave propagation
+learning_rate = 0.005
 
 
 '''Directories'''
@@ -66,16 +68,15 @@ t = torch.arange(0, timesteps*dt, dt, device=dev).unsqueeze(0).unsqueeze(2) # ti
 X1 = Bt*torch.sin(2*np.pi*f1*t)  # sinusoid signal at f1 frequency, Bt amplitude
 X2 = Bt*torch.sin(2*np.pi*f2*t)
 X3 = Bt*torch.sin(2*np.pi*f3*t)
-
 INPUTS = torch.cat((X1,X2,X3),dim=0)  # here we could cat multiple inputs
 # INPUTS = Bt*torch.sin(2*np.pi*f1*t) # here we could cat multiple inputs
 OUTPUTS = torch.tensor(np.array([0,1,2]),dtype=torch.long).to(dev) # desired output
 
 '''Define optimizer and lossfunction'''
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 def my_loss(output, target_index):
-    output = output/(output.sum(dim=-1)) 
-    return torch.nn.functional.nll_loss(output,target_index)
+    output = output/(output.sum(dim=-1).unsqueeze(-1))
+    return torch.nn.functional.cross_entropy(output,target_index)
 '''Load checkpoint'''
 epoch = epoch_init = -1 # select previous checkpoint (-1 = don't use checkpoint)
 if epoch_init>=0:
