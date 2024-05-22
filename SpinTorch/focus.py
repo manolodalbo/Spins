@@ -29,6 +29,7 @@ f2 = 3.5e9
 f3 = 3e9
 timesteps = 600 # number of timesteps for wave propagation
 learning_rate = 0.005
+batch_size = 256
 
 
 '''Directories'''
@@ -57,7 +58,7 @@ epochs = 20
 Np = 3  # number of probes
 for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
-model = spintorch.MMSolver(geom, dt, 3, [src], probes)
+model = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
 
 dev = torch.device('cpu')  # 'cuda' or 'cpu'
 print('Running on', dev)
@@ -65,7 +66,6 @@ model.to(dev)   # sending model to GPU/CPU
 
 with open('C:\spin\data\data.p','rb') as data_file:
     data_dict = pickle.load(data_file)
-batch_size = 256
 INPUTS = torch.tensor(data_dict['train_inputs']).unsqueeze(-1).to(dev)
 OUTPUTS = torch.tensor(data_dict['train_labels']).to(dev) # desired output
 print(INPUTS.shape)

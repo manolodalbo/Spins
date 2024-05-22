@@ -92,6 +92,7 @@ class MMSolver(nn.Module):
         Called in run_stage for every loop through the signal
         """
         for i, src in enumerate(self.sources):
+            print(src.shape)
             B_ext = src(B_ext, sig[:,0,i]) # changed this to be compattible with different batch sizes.
         return B_ext
 
