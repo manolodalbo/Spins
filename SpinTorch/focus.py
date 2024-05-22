@@ -49,6 +49,7 @@ if not os.path.isdir(savedir):
 #                                     r0, dr, dm, z_off, rx, ry, Ms_CoPt)
 # B1 = 50e-3      # training field multiplier (T)
 # geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
+batch_size = 3
 geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
 src = spintorch.WaveLineSource(10, 0, 10, ny-1, dim=2)
 probes = []
