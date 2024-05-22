@@ -76,6 +76,7 @@ OUTPUTS = torch.tensor(np.array([0,1,2]),dtype=torch.long).to(dev) # desired out
 '''Define optimizer and lossfunction'''
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 def my_loss(output, target_index):
+    print(output)
     output = output/(output.sum(dim=-1).unsqueeze(-1))
     return torch.nn.functional.cross_entropy(output,target_index)
 '''Load checkpoint'''

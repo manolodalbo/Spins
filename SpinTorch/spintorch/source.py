@@ -12,8 +12,6 @@ class WaveSource(torch.nn.Module):
 
     def forward(self, B, Bt):
         Bs = B.clone()
-        print(Bs.shape)
-        print(Bt.shape)
         Bs[:,self.dim, self.x, self.y] = Bs[:,self.dim, self.x, self.y] + Bt.unsqueeze(-1)
         return Bs
 
