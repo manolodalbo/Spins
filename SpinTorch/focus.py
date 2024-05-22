@@ -6,8 +6,9 @@ import numpy as np
 from spintorch.utils import tic, toc, stat_cuda
 from spintorch.plot import wave_integrated, wave_snapshot
 import matplotlib.pyplot as plt
-
+import pickle
 import warnings
+from tqdm import tqdm
 warnings.filterwarnings("ignore", message=".*Casting complex values to real.*")
 
 
@@ -62,15 +63,13 @@ dev = torch.device('cpu')  # 'cuda' or 'cpu'
 print('Running on', dev)
 model.to(dev)   # sending model to GPU/CPU
 
-
-'''Define the source signal and output goal'''
-t = torch.arange(0, timesteps*dt, dt, device=dev).unsqueeze(0).unsqueeze(2) # time vector
-X1 = Bt*torch.sin(2*np.pi*f1*t)  # sinusoid signal at f1 frequency, Bt amplitude
-X2 = Bt*torch.sin(2*np.pi*f2*t)
-X3 = Bt*torch.sin(2*np.pi*f3*t)
-INPUTS = torch.cat((X1,X2,X3),dim=0)  # here we could cat multiple inputs
-# INPUTS = Bt*torch.sin(2*np.pi*f1*t) # here we could cat multiple inputs
-OUTPUTS = torch.tensor(np.array([0,1,2]),dtype=torch.long).to(dev) # desired output
+with open('C:\spin\data\data.p','rb') as data_file:
+    data_dict = pickle.load(data_file)
+batch_size = 256
+INPUTS = torch.tensor(data_dict['train_inputs']).unsqueeze(-1).to(dev)
+OUTPUTS = torch.tensor(data_dict['train_labels']).to(dev) # desired output
+print(INPUTS.shape)
+print(OUTPUTS.shape)
 
 '''Define optimizer and lossfunction'''
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -89,20 +88,23 @@ else:
     loss_iter = []
 
 '''Train the network'''
+print(INPUTS.shape)
+pbar = tqdm(total=INPUTS.shape[0]//batch_size)
 tic()
 model.retain_history = True
 for epoch in range(epoch_init+1, epochs):
-    optimizer.zero_grad()
-    u = model(INPUTS)
-    print("output: ")
-    print(u)
-    loss = my_loss(u,OUTPUTS)
+    for b,b1 in enumerate(range(batch_size,INPUTS.shape[0]+1,batch_size)):
+        b0 = b1 = batch_size
+        u = model(INPUTS[b0:b1])
+        loss = my_loss(u,OUTPUTS[b0:b1])
+        stat_cuda('after forward')
+        loss.backward()
+        optimizer.step()
+        stat_cuda('after backward')
+        pbar.set_description(f'Batch {b + 1}/{INPUTS.shape[0]//batch_size}, Loss: {loss.item()}')
+        pbar.update(1)
     loss_iter.append(loss.item())  # store loss values
     spintorch.plot.plot_loss(loss_iter, plotdir)
-    stat_cuda('after forward')
-    loss.backward()
-    optimizer.step()
-    stat_cuda('after backward')
     print("Epoch finished: %d -- Loss: %.6f" % (epoch, loss))
     toc()   
 

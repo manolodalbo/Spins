@@ -14,14 +14,13 @@ def load_and_preprocess_data():
     
     #Load in the training and testing data from the MNIST dataset
     (train_inputs, train_labels), (test_inputs, test_labels) = tf.keras.datasets.mnist.load_data()
-    ## TODO: Flatten (reshape) and normalize the inputs
-    ## Hint: train and test inputs are numpy arrays so you can use np methods on them!
     train_inputs = train_inputs.reshape(-1,784)/255
     test_inputs = test_inputs.reshape(-1,784)/255
     train_inputs = fm(train_inputs,0.05e9,9e9)
     test_inputs = fm(test_inputs,0.05e9,9e9)
     train_labels = tensor(train_labels)
     print(train_labels.shape)
+    print(train_inputs.shape)
     test_labels = tensor(test_labels)
     with open(f'C:/spin/data/data.p', 'wb') as pickle_file:
         pickle.dump(dict(train_inputs=train_inputs,train_labels=train_labels,test_inputs=test_inputs,test_labels=test_labels), pickle_file)
