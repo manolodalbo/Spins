@@ -55,7 +55,7 @@ geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
 src = spintorch.WaveLineSource(10, 0, 10, ny-1, dim=2)
 probes = []
 epochs = 20
-Np = 3  # number of probes
+Np = 10  # number of probes
 for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
 model = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
@@ -66,7 +66,7 @@ model.to(dev)   # sending model to GPU/CPU
 
 with open('C:\spin\data\data.p','rb') as data_file:
     data_dict = pickle.load(data_file)
-INPUTS = torch.tensor(data_dict['train_inputs']).unsqueeze(-1).to(dev)
+INPUTS = torch.tensor(data_dict['train_inputs']*Bt).unsqueeze(-1).to(dev)
 OUTPUTS = torch.tensor(data_dict['train_labels']).to(dev) # desired output
 print(INPUTS.shape)
 print(OUTPUTS.shape)
@@ -94,7 +94,7 @@ tic()
 model.retain_history = True
 for epoch in range(epoch_init+1, epochs):
     for b,b1 in enumerate(range(batch_size,INPUTS.shape[0]+1,batch_size)):
-        b0 = b1 = batch_size
+        b0 = b1 - batch_size
         u = model(INPUTS[b0:b1])
         loss = my_loss(u,OUTPUTS[b0:b1])
         stat_cuda('after forward')
