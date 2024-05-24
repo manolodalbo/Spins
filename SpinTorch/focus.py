@@ -29,7 +29,7 @@ f2 = 3.5e9
 f3 = 3e9
 timesteps = 600 # number of timesteps for wave propagation
 learning_rate = 0.005
-batch_size = 256
+batch_size = 10
 
 
 '''Directories'''
@@ -66,10 +66,9 @@ model.to(dev)   # sending model to GPU/CPU
 
 with open('C:\spin\data\data.p','rb') as data_file:
     data_dict = pickle.load(data_file)
+    
 INPUTS = torch.tensor(data_dict['train_inputs']*Bt).unsqueeze(-1).to(dev)
 OUTPUTS = torch.tensor(data_dict['train_labels']).to(dev) # desired output
-print(INPUTS.shape)
-print(OUTPUTS.shape)
 
 '''Define optimizer and lossfunction'''
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -93,16 +92,12 @@ pbar = tqdm(total=INPUTS.shape[0]//batch_size)
 tic()
 model.retain_history = True
 for epoch in range(epoch_init+1, epochs):
-    for b,b1 in enumerate(range(batch_size,INPUTS.shape[0]+1,batch_size)):
-        b0 = b1 - batch_size
-        u = model(INPUTS[b0:b1])
-        loss = my_loss(u,OUTPUTS[b0:b1])
-        stat_cuda('after forward')
-        loss.backward()
-        optimizer.step()
-        stat_cuda('after backward')
-        pbar.set_description(f'Batch {b + 1}/{INPUTS.shape[0]//batch_size}, Loss: {loss.item()}')
-        pbar.update(1)
+    u = model(INPUTS)
+    loss = my_loss(u,OUTPUTS)
+    stat_cuda('after forward')
+    loss.backward()
+    optimizer.step()
+    stat_cuda('after backward')
     loss_iter.append(loss.item())  # store loss values
     spintorch.plot.plot_loss(loss_iter, plotdir)
     print("Epoch finished: %d -- Loss: %.6f" % (epoch, loss))

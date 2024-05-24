@@ -16,14 +16,24 @@ def load_and_preprocess_data():
     (train_inputs, train_labels), (test_inputs, test_labels) = tf.keras.datasets.mnist.load_data()
     train_inputs = train_inputs.reshape(-1,784)/255
     test_inputs = test_inputs.reshape(-1,784)/255
-    train_inputs = fm(train_inputs,0.1e9,5e9)
-    test_inputs = fm(test_inputs,0.1e9,5e9)
-    train_labels = tensor(train_labels)
+    refined_inputs  = []
+    refined_ouputs = []
+    already_seen = set()
+    i = 0
+    while len(refined_inputs) < 10:
+        if train_labels[i] not in already_seen:
+            refined_inputs.append(train_inputs[i])
+            refined_ouputs.append(train_labels[i])
+            already_seen.add(train_labels[i])
+        i  = i + 1
+    train_inputs = fm(np.array(refined_inputs),0.1e9,5e9)
+    test_inputs = fm(test_inputs[0:10],0.1e9,5e9)
+    train_labels = tensor(refined_ouputs)
     print(train_labels.shape)
     print(train_inputs.shape)
     test_labels = tensor(test_labels)
     with open(f'C:/spin/data/data.p', 'wb') as pickle_file:
-        pickle.dump(dict(train_inputs=train_inputs,train_labels=train_labels,test_inputs=test_inputs,test_labels=test_labels), pickle_file)
+        pickle.dump(dict(train_inputs=train_inputs,train_labels=train_labels,test_inputs=test_inputs,test_labels=test_labels[0:10]), pickle_file)
     print(f'Data has been dumped into {"C:/spin/data"}/data.p!')
 def fm(inputs: np.array, Fi: float, Ff: float) -> np.array:
     """
