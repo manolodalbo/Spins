@@ -69,7 +69,7 @@ t = torch.arange(0, timesteps*dt, dt, device=dev).unsqueeze(0).unsqueeze(2) # ti
 X1 = Bt*torch.sin(2*np.pi*f1*t)  # sinusoid signal at f1 frequency, Bt amplitude
 X2 = Bt*torch.sin(2*np.pi*f2*t)
 X3 = Bt*torch.sin(2*np.pi*f3*t)
-INPUTS = torch.cat((X1,X2,X3),dim=0)  # here we could cat multiple inputs
+INPUTS = torch.cat((X1,X2,X3),dim=0).to(dev)  # here we could cat multiple inputs
 # INPUTS = Bt*torch.sin(2*np.pi*f1*t) # here we could cat multiple inputs
 OUTPUTS = torch.tensor(np.array([0,1,2]),dtype=torch.long).to(dev) # desired output
 
