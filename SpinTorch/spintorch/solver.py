@@ -109,6 +109,7 @@ class MMSolver(nn.Module):
         
     def relax(self, B_ext, Msat): 
         """Run the solver with high damping to relax magnetization"""
+        # I don't fully understand what this does. I need to figure it out, but runs before every forward pass
         with torch.no_grad():
             for n in range(self.relax_timesteps):
                 self.m0 = self.rk4_step_LLG(self.m0, B_ext, Msat, relax=True)

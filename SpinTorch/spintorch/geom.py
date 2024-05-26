@@ -38,7 +38,10 @@ class WaveGeometryFreeForm(WaveGeometry):
         return self.B
 
 
-
+"""
+The following wave geometry alters the saturation magnetization as a trainable parameter. This is 100 by 100 (usually) parameters. One for each
+square of the magnetic strip
+"""
 class WaveGeometryMs(WaveGeometry):
     def __init__(self, dim: tuple, d: tuple, Ms: float, B0: float):
 
@@ -46,6 +49,7 @@ class WaveGeometryMs(WaveGeometry):
 
         self.rho = nn.Parameter(ones(dim)) # this is the only trainable parameter usually
         # self.register_buffer("rho",ones(dim)) #can alter this so that we are no longer training with rho
+        print(self.rho.shape)
         self.register_buffer("Msat", zeros(dim))
         self.register_buffer("B0", tensor(B0))
         self.register_buffer("B", zeros((3,)+dim))
