@@ -27,7 +27,7 @@ f1 = 4e9        # source frequency (Hz)
 f2 = 3.5e9
 f3 = 3e9
 timesteps = 600 # number of timesteps for wave propagation
-learning_rate = 0.005
+learning_rate = 0.01
 
 
 '''Directories'''
@@ -47,10 +47,10 @@ if not os.path.isdir(savedir):
 # rho = torch.zeros((rx, ry))  # Design parameter array
 # geom = spintorch.WaveGeometryArray(rho, (nx, ny), (dx, dy, dz), Ms, B0, 
 #                                     r0, dr, dm, z_off, rx, ry, Ms_CoPt)
-# B1 = 50e-3      # training field multiplier (T)
-# geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
+B1 = 50e-3      # training field multiplier (T)
+geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
 batch_size = 3
-geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
+# geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
 src = spintorch.WaveLineSource(10, 0, 10, ny-1, dim=2)
 probes = []
 epochs = 20
