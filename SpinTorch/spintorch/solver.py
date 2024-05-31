@@ -125,7 +125,8 @@ class MMSolver(nn.Module):
         k2 = self.torque_LLG(m + h*k1/2, B_ext, Msat, relax)
         k3 = self.torque_LLG(m + h*k2/2, B_ext, Msat, relax)
         k4 = self.torque_LLG(m + h*k3, B_ext, Msat, relax)
-        return (m + h/6 * ((k1 + 2*k2) + (2*k3 + k4)))
+        to_return = (m + h/6 * ((k1 + 2*k2) + (2*k3 + k4)))
+        return to_return
     
     def torque_LLG(self, m, B_ext, Msat, relax=False):
         """Calculate Landau-Lifshitz-Gilbert torque"""

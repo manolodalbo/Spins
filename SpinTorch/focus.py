@@ -10,8 +10,9 @@ import pickle
 import warnings
 from tqdm import tqdm
 warnings.filterwarnings("ignore", message=".*Casting complex values to real.*")
-
-def fm(inputs: np.array, Fi: float, Ff: float) -> np.array:
+import matplotlib
+matplotlib.use('TkAgg')
+def fm(inputs: np.array, Fi: float, Ff: float,points_per_input: int) -> np.array:
     """
     Frequency modulate the input images.
     
@@ -23,7 +24,7 @@ def fm(inputs: np.array, Fi: float, Ff: float) -> np.array:
     Returns:
         np.array: Frequency modulated waveforms for each input image.
     """
-    points_per_input = 1
+    points_per_input = points_per_input
     dt = 20e-12     # timestep (s)
     timesteps = inputs.shape[1] * points_per_input
     t = np.arange(0, timesteps * dt, dt)  # time vector
@@ -91,9 +92,9 @@ if not os.path.isdir(savedir):
 # rho = torch.zeros((rx, ry))  # Design parameter array
 # geom = spintorch.WaveGeometryArray(rho, (nx, ny), (dx, dy, dz), Ms, B0, 
 #                                     r0, dr, dm, z_off, rx, ry, Ms_CoPt)
-# B1 = 50e-3      # training field multiplier (T)
-# geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
-geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
+B1 = 50e-3      # training field multiplier (T)
+geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
+# geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
 src = spintorch.WaveLineSource(10, 0, 10, ny-1, dim=2)
 probes = []
 epochs = 20
@@ -110,7 +111,7 @@ with open('C:\spin\data\data.p','rb') as data_file:
     data_dict = pickle.load(data_file)
 high_then_low = torch.cat((torch.ones(300,1),torch.zeros(300,1)))
 low_then_high = torch.cat((torch.zeros(300,1),torch.ones(300,1)))
-INPUTS = torch.tensor(Bt * fm(np.array([high_then_low,low_then_high]),3e9,5e9)).unsqueeze(-1).to(dev)
+INPUTS = torch.tensor(Bt * fm(np.array([high_then_low,low_then_high]),3e9,5e9,1)).unsqueeze(-1).to(dev)
 #INPUTS = torch.tensor(data_dict['train_inputs']*Bt).unsqueeze(-1).to(dev)
 OUTPUTS = torch.tensor([0,1],dtype=torch.long).to(dev) # desired output
 
