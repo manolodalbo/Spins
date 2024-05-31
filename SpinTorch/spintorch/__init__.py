@@ -8,5 +8,4 @@ from .probe import WaveProbe, WaveIntensityProbe, WaveIntensityProbeDisk
 from .source import WaveSource, WaveLineSource
 from .damping import Damping
 from .binarize import Binarize, binarize
-
 __version__ = "1.0.0"

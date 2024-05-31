@@ -32,9 +32,9 @@ def load_and_preprocess_data():
     print(train_labels.shape)
     print(train_inputs.shape)
     test_labels = tensor(test_labels)
-    with open(f'C:/spin/data/data.p', 'wb') as pickle_file:
+    with open(f'C:/spins/data/data.p', 'wb') as pickle_file:
         pickle.dump(dict(train_inputs=train_inputs,train_labels=train_labels,test_inputs=test_inputs,test_labels=test_labels[0:10]), pickle_file)
-    print(f'Data has been dumped into {"C:/spin/data"}/data.p!')
+    print(f'Data has been dumped into {"C:/spins/data"}/data.p!')
 def fm(inputs: np.array, Fi: float, Ff: float) -> np.array:
     """
     Frequency modulate the input images.
@@ -47,7 +47,7 @@ def fm(inputs: np.array, Fi: float, Ff: float) -> np.array:
     Returns:
         np.array: Frequency modulated waveforms for each input image.
     """
-    points_per_input = 2
+    points_per_input = 1
     dt = 20e-12     # timestep (s)
     timesteps = inputs.shape[1] * points_per_input
     t = np.arange(0, timesteps * dt, dt)  # time vector
@@ -65,17 +65,19 @@ def fm(inputs: np.array, Fi: float, Ff: float) -> np.array:
                 if not pos_deriv:
                     phase = np.pi - phase
                 modulated_wave[i, points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1.5))*np.sin(2 * np.pi * frequency * t[1:points_per_input+1] + phase)
+                # modulated_wave[i, points_per_input*j:points_per_input*(j+1)] = np.sin(2 * np.pi * frequency * t[1:points_per_input+1] + phase)
                 if np.cos(2*np.pi*frequency*t[points_per_input] + phase) > 0:
                     pos_deriv=True
                 else:
                     pos_deriv = False
-                prev = np.sin(2* np.pi * frequency * t[3] + phase)
+                prev = np.sin(2* np.pi * frequency * t[points_per_input] + phase)
             else:
                 modulated_wave[i,points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1.5))*np.sin(2*np.pi*frequency*t[0:points_per_input])
+                # modulated_wave[i,points_per_input*j:points_per_input*(j+1)] = np.sin(2*np.pi*frequency*t[0:points_per_input])
                 if np.cos(2*np.pi*frequency*t[points_per_input-1]) > 0:
                     pos_deriv=True
                 else:
                     pos_deriv = False
-                prev = np.sin(2* np.pi * frequency *t[2])
+                prev = np.sin(2* np.pi * frequency *t[points_per_input-1])
     return modulated_wave
 load_and_preprocess_data()

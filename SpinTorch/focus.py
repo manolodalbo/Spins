@@ -12,7 +12,7 @@ from tqdm import tqdm
 warnings.filterwarnings("ignore", message=".*Casting complex values to real.*")
 import matplotlib
 matplotlib.use('TkAgg')
-def fm(inputs: np.array, Fi: float, Ff: float,points_per_input: int) -> np.array:
+def fm(inputs: np.array, Fi: float, Ff: float) -> np.array:
     """
     Frequency modulate the input images.
     
@@ -24,7 +24,7 @@ def fm(inputs: np.array, Fi: float, Ff: float,points_per_input: int) -> np.array
     Returns:
         np.array: Frequency modulated waveforms for each input image.
     """
-    points_per_input = points_per_input
+    points_per_input = 1
     dt = 20e-12     # timestep (s)
     timesteps = inputs.shape[1] * points_per_input
     t = np.arange(0, timesteps * dt, dt)  # time vector
@@ -42,18 +42,20 @@ def fm(inputs: np.array, Fi: float, Ff: float,points_per_input: int) -> np.array
                 if not pos_deriv:
                     phase = np.pi - phase
                 modulated_wave[i, points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1.5))*np.sin(2 * np.pi * frequency * t[1:points_per_input+1] + phase)
+                # modulated_wave[i, points_per_input*j:points_per_input*(j+1)] = np.sin(2 * np.pi * frequency * t[1:points_per_input+1] + phase)
                 if np.cos(2*np.pi*frequency*t[points_per_input] + phase) > 0:
                     pos_deriv=True
                 else:
                     pos_deriv = False
-                prev = np.sin(2* np.pi * frequency * t[3] + phase)
+                prev = np.sin(2* np.pi * frequency * t[points_per_input] + phase)
             else:
                 modulated_wave[i,points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1.5))*np.sin(2*np.pi*frequency*t[0:points_per_input])
+                # modulated_wave[i,points_per_input*j:points_per_input*(j+1)] = np.sin(2*np.pi*frequency*t[0:points_per_input])
                 if np.cos(2*np.pi*frequency*t[points_per_input-1]) > 0:
                     pos_deriv=True
                 else:
                     pos_deriv = False
-                prev = np.sin(2* np.pi * frequency *t[2])
+                prev = np.sin(2* np.pi * frequency *t[points_per_input-1])
     return modulated_wave
 """Parameters"""
 dx = 50e-9      # discretization (m)
@@ -97,21 +99,28 @@ geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
 # geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
 src = spintorch.WaveLineSource(10, 0, 10, ny-1, dim=2)
 probes = []
-epochs = 20
+epochs = 30
 Np = 2  # number of probes
 for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
 model = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
 
-dev = torch.device('cpu')  # 'cuda' or 'cpu'
+dev = torch.device('cuda')  # 'cuda' or 'cpu'
 print('Running on', dev)
 model.to(dev)   # sending model to GPU/CPU
 
-with open('C:\spin\data\data.p','rb') as data_file:
-    data_dict = pickle.load(data_file)
-high_then_low = torch.cat((torch.ones(300,1),torch.zeros(300,1)))
-low_then_high = torch.cat((torch.zeros(300,1),torch.ones(300,1)))
-INPUTS = torch.tensor(Bt * fm(np.array([high_then_low,low_then_high]),3e9,5e9,1)).unsqueeze(-1).to(dev)
+# with open('C:\spin\data\data.p','rb') as data_file:
+#     data_dict = pickle.load(data_file)
+# high_then_low = torch.cat((torch.ones(300,1),torch.zeros(300,1)))
+# low_then_high = torch.cat((torch.zeros(300,1),torch.ones(300,1)))
+high_freq = 2* Bt * torch.sin(2*np.pi*3e9*torch.arange(0,300*20e-12,20e-12))
+low_freq = Bt * torch.sin(2*np.pi*5e9*torch.arange(0,300*20e-12,20e-12))
+high_then_low = torch.cat([high_freq,low_freq],dim=0)
+print(high_then_low.shape)
+low_then_high = torch.cat([low_freq,high_freq],dim=0)
+print(low_then_high.shape)
+INPUTS = torch.tensor(np.array([high_then_low,low_then_high])).unsqueeze(-1).to(dev)
+print(INPUTS.shape)
 #INPUTS = torch.tensor(data_dict['train_inputs']*Bt).unsqueeze(-1).to(dev)
 OUTPUTS = torch.tensor([0,1],dtype=torch.long).to(dev) # desired output
 
