@@ -6,7 +6,7 @@ class Damping(nn.Module):
     alpha = 1e-4    # damping coefficient ()
     alpha_max = 0.5 # maximum damping used on boundaries and for relax ()
     region_width = 10   # width of absorbing region (cells)
-    alpha_min = 5e-5
+    alpha_min = 2e-5
     alpha_real_max = 0.55
     
     def __init__(self, dim: tuple):

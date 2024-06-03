@@ -23,6 +23,14 @@ def plot_loss(loss_iter, plotdir):
     plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
     fig.savefig(plotdir+'loss.png')
     plt.close(fig)
+def plot_accuracy(acc_iter, plotdir):
+    fig = plt.figure()
+    plt.plot(acc_iter, 'o-')
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
+    fig.savefig(plotdir+'accuracy.png')
+    plt.close(fig)
     
 def plot_output(u, p, epoch, plotdir):
     fig = plt.figure()

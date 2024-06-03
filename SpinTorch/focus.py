@@ -10,53 +10,6 @@ import pickle
 import warnings
 from tqdm import tqdm
 warnings.filterwarnings("ignore", message=".*Casting complex values to real.*")
-import matplotlib
-matplotlib.use('TkAgg')
-def fm(inputs: np.array, Fi: float, Ff: float) -> np.array:
-    """
-    Frequency modulate the input images.
-    
-    Parameters:
-        inputs (np.array): Array of shape (number of inputs, 784), where each row represents an image.
-        Fi (float): Minimum frequency in Hz.
-        Ff (float): Final frequency in Hz.
-    
-    Returns:
-        np.array: Frequency modulated waveforms for each input image.
-    """
-    points_per_input = 1
-    dt = 20e-12     # timestep (s)
-    timesteps = inputs.shape[1] * points_per_input
-    t = np.arange(0, timesteps * dt, dt)  # time vector
-    modulated_wave = np.zeros((inputs.shape[0], timesteps),dtype="float32")
-    pbar = tqdm(inputs)
-    for i in range(inputs.shape[0]):
-        pbar.set_description(f"[({i+1}/{len(inputs)})] Processing images into waves")
-        pos_deriv = True
-        prev = 0
-        for j, pixel_intensity in enumerate(inputs[i]):
-            # Calculate the corresponding frequency for this pixel
-            frequency = Fi + pixel_intensity * (Ff - Fi)
-            if j>0:
-                phase = np.arcsin(prev)
-                if not pos_deriv:
-                    phase = np.pi - phase
-                modulated_wave[i, points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1.5))*np.sin(2 * np.pi * frequency * t[1:points_per_input+1] + phase)
-                # modulated_wave[i, points_per_input*j:points_per_input*(j+1)] = np.sin(2 * np.pi * frequency * t[1:points_per_input+1] + phase)
-                if np.cos(2*np.pi*frequency*t[points_per_input] + phase) > 0:
-                    pos_deriv=True
-                else:
-                    pos_deriv = False
-                prev = np.sin(2* np.pi * frequency * t[points_per_input] + phase)
-            else:
-                modulated_wave[i,points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1.5))*np.sin(2*np.pi*frequency*t[0:points_per_input])
-                # modulated_wave[i,points_per_input*j:points_per_input*(j+1)] = np.sin(2*np.pi*frequency*t[0:points_per_input])
-                if np.cos(2*np.pi*frequency*t[points_per_input-1]) > 0:
-                    pos_deriv=True
-                else:
-                    pos_deriv = False
-                prev = np.sin(2* np.pi * frequency *t[points_per_input-1])
-    return modulated_wave
 """Parameters"""
 dx = 50e-9      # discretization (m)
 dy = 50e-9      # discretization (m)
@@ -66,14 +19,14 @@ ny = 100        # size y    (cells)
 
 Ms = 140e3      # saturation magnetization (A/m)
 B0 = 60e-3      # bias field (T)
-Bt = 1e-3       # excitation field amplitude (T)
+Bt = 10e-3       # excitation field amplitude (T)
 
 dt = 20e-12     # timestep (s)
 f1 = 4e9        # source frequency (Hz)
 f2 = 3.5e9
 f3 = 3e9
 timesteps = 600 # number of timesteps for wave propagation
-learning_rate = 0.001
+learning_rate = 0.0001
 batch_size = 2
 
 
@@ -99,7 +52,7 @@ geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
 # geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
 src = spintorch.WaveLineSource(10, 0, 10, ny-1, dim=2)
 probes = []
-epochs = 30
+epochs = 400
 Np = 2  # number of probes
 for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
@@ -109,26 +62,61 @@ dev = torch.device('cuda')  # 'cuda' or 'cpu'
 print('Running on', dev)
 model.to(dev)   # sending model to GPU/CPU
 
-# with open('C:\spin\data\data.p','rb') as data_file:
-#     data_dict = pickle.load(data_file)
-# high_then_low = torch.cat((torch.ones(300,1),torch.zeros(300,1)))
-# low_then_high = torch.cat((torch.zeros(300,1),torch.ones(300,1)))
-high_freq = 2* Bt * torch.sin(2*np.pi*3e9*torch.arange(0,300*20e-12,20e-12))
-low_freq = Bt * torch.sin(2*np.pi*5e9*torch.arange(0,300*20e-12,20e-12))
-high_then_low = torch.cat([high_freq,low_freq],dim=0)
-print(high_then_low.shape)
-low_then_high = torch.cat([low_freq,high_freq],dim=0)
-print(low_then_high.shape)
-INPUTS = torch.tensor(np.array([high_then_low,low_then_high])).unsqueeze(-1).to(dev)
+with open('C:\spins\data\data.p','rb') as data_file:
+    data_dict = pickle.load(data_file)
+high_then_low = torch.cat((torch.ones(300,1),torch.zeros(300,1)))
+low_then_high = torch.cat((torch.zeros(300,1),torch.ones(300,1)))
+# INPUTS = torch.tensor(Bt * fm(np.array([high_then_low,low_then_high]),3e9,5e9,1)).unsqueeze(-1).to(dev)
+# OUTPUTS = torch.tensor([0,1],dtype=torch.long).to(dev) # desired output
+INPUTS = torch.tensor(data_dict['train_inputs']*Bt).unsqueeze(-1).to(dev)
+print("inputs shape: ")
 print(INPUTS.shape)
-#INPUTS = torch.tensor(data_dict['train_inputs']*Bt).unsqueeze(-1).to(dev)
-OUTPUTS = torch.tensor([0,1],dtype=torch.long).to(dev) # desired output
-
+OUTPUTS = torch.tensor(data_dict['train_labels'],dtype=torch.long).to(dev) # desired output
+print(OUTPUTS)
 '''Define optimizer and lossfunction'''
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-def my_loss(output, target_index):
-    output = output/(output.sum(dim=-1).unsqueeze(-1))
+def ohe(target_values: torch.Tensor, num_classes: int) -> torch.Tensor:
+    """
+    One-hot encodes the target values.
+    
+    Parameters:
+        target_values (torch.Tensor): Tensor of shape (batch size, 1) containing the target values.
+        num_classes (int): Number of classes.
+    
+    Returns:
+        torch.Tensor: One-hot encoded tensor of shape (batch size, num_classes).
+    """
+    return torch.eye(num_classes,device=dev)[target_values]
+
+def my_cce(output, target_index):
+    average = output.sum(dim=-1).unsqueeze(-1)/output.size()[-1]
+    output = output - average
+    encoded_targets = ohe(target_index, output.size()[-1])
+    preds = output/output.abs().sum(dim=-1).unsqueeze(-1)
+    preds = torch.nn.functional.softmax(preds,dim=-1)
+    logged = -torch.log(preds)*encoded_targets
+    cce = torch.sum(logged,dim=-1)
+    return cce.mean()
+def log_loss_norm(output,target_index):
+    encoded_targets = ohe(target_index, output.size()[-1])
+    preds = output/output.sum(dim=-1).unsqueeze(-1)
+    logged = -torch.log(preds)*encoded_targets
+    cce = torch.sum(logged,dim=-1)
+    return cce.mean()
+def their_loss(output, target_index):
+    output = output/output.sum(dim=-1).unsqueeze(-1)
     return torch.nn.functional.cross_entropy(output,target_index)
+def loss_combo(output,target_index):
+    average = output.sum(dim=-1).unsqueeze(-1)/output.size()[-1]
+    output = output - average
+    preds = output/output.abs().sum(dim=-1).unsqueeze(-1)
+    loss = torch.nn.functional.cross_entropy(preds,target_index)
+    return loss
+def div_loss(output,target_index):
+    output = output/10e13
+    loss = torch.nn.functional.cross_entropy(output,target_index)
+    return loss
+
 '''Load checkpoint'''
 epoch = epoch_init = -1 # select previous checkpoint (-1 = don't use checkpoint)
 if epoch_init>=0:
@@ -139,7 +127,8 @@ if epoch_init>=0:
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 else:
     loss_iter = []
-
+max_accuracy = 0
+best_epoch = 0
 '''Train the network'''
 print(INPUTS.shape)
 pbar = tqdm(total=INPUTS.shape[0]//batch_size)
@@ -148,14 +137,21 @@ model.retain_history = True
 for epoch in range(epoch_init+1, epochs):
     u = model(INPUTS)
     print(u)
-    loss = my_loss(u,OUTPUTS)
+    loss = log_loss_norm(u,OUTPUTS)
+    accuracy = (u.argmax(dim=-1) == OUTPUTS).float().mean()
+    if accuracy > max_accuracy:
+        max_accuracy = accuracy
+        best_epoch = epoch
     stat_cuda('after forward')
     loss.backward()
     optimizer.step()
     stat_cuda('after backward')
     loss_iter.append(loss.item())  # store loss values
-    spintorch.plot.plot_loss(loss_iter, plotdir)
-    print("Epoch finished: %d -- Loss: %.6f" % (epoch, loss))
+    try:
+        spintorch.plot.plot_loss(loss_iter, plotdir)
+    except:
+        print("Plotting loss failed")
+    print("Epoch finished: %d -- Loss: %.6f -- Accuracy: %f" % (epoch, loss,accuracy))
     toc()   
 
     '''Save model checkpoint'''
@@ -169,11 +165,15 @@ for epoch in range(epoch_init+1, epochs):
     '''Plot spin-wave propagation'''
     if model.retain_history:
         with torch.no_grad():
-            spintorch.plot.geometry(model, epoch=epoch, plotdir=plotdir)
-            mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
-            wave_snapshot(model, mz[timesteps-1], (plotdir+'snapshot_time%d_epoch%d.png' % (timesteps,epoch)),r"$m_z$")
-            wave_snapshot(model, mz[int(timesteps/2)-1], (plotdir+'snapshot_time%d_epoch%d.png' % (int(timesteps/2),epoch)),r"$m_z$")
-            wave_integrated(model, mz, (plotdir+'integrated_epoch%d.png' % (epoch)))
-
-
-  
+            try:
+                spintorch.plot.geometry(model, epoch=epoch, plotdir=plotdir)
+                mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
+                wave_snapshot(model, mz[timesteps-1], (plotdir+'snapshot_time%d_epoch%d.png' % (timesteps,epoch)),r"$m_z$")
+                wave_snapshot(model, mz[int(timesteps/2)-1], (plotdir+'snapshot_time%d_epoch%d.png' % (int(timesteps/2),epoch)),r"$m_z$")
+                wave_integrated(model, mz, (plotdir+'integrated_epoch%d.png' % (epoch)))
+            except:
+                print("Plotting failed")
+print("maximum accuracy:")
+print(max_accuracy)
+print("best epoch:")
+print(best_epoch)
