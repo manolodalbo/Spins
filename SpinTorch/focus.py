@@ -59,7 +59,7 @@ for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
 model = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
 
-dev = torch.device('cpu')  # 'cuda' or 'cpu'
+dev = torch.device('cuda')  # 'cuda' or 'cpu'
 print('Running on', dev)
 model.to(dev)   # sending model to GPU/CPU
 
