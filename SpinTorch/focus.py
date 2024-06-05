@@ -28,7 +28,52 @@ f3 = 3e9
 timesteps = 600 # number of timesteps for wave propagation
 learning_rate = 0.0001
 batch_size = 2
-
+def fm(inputs: np.array, Fi: float, Ff: float,samples_per_point:int) -> np.array:
+    """
+    Frequency modulate the input images.
+    
+    Parameters:
+        inputs (np.array): Array of shape (number of inputs, 784), where each row represents an image.
+        Fi (float): Minimum frequency in Hz.
+        Ff (float): Final frequency in Hz.
+    
+    Returns:
+        np.array: Frequency modulated waveforms for each input image.
+    """
+    points_per_input = samples_per_point
+    dt = 20e-12     # timestep (s)
+    timesteps = inputs.shape[1] * points_per_input
+    t = np.arange(0, timesteps * dt, dt)  # time vector
+    modulated_wave = np.zeros((inputs.shape[0], timesteps),dtype="float32")
+    pbar = tqdm(inputs)
+    for i in range(inputs.shape[0]):
+        pbar.set_description(f"[({i+1}/{len(inputs)})] Processing images into waves")
+        pos_deriv = True
+        prev = 0
+        for j, pixel_intensity in enumerate(inputs[i]):
+            # Calculate the corresponding frequency for this pixel
+            frequency = Fi + pixel_intensity * (Ff - Fi)
+            if j>0:
+                phase = np.arcsin(prev)
+                if not pos_deriv:
+                    phase = np.pi - phase
+                modulated_wave[i, points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1))*np.sin(2 * np.pi * frequency * t[1:points_per_input+1] + phase)
+                if np.cos(2*np.pi*frequency*t[points_per_input] + phase) > 0:
+                    pos_deriv=True
+                else:
+                    pos_deriv = False
+                prev = np.sin(2* np.pi * frequency * t[points_per_input] + phase)
+            else:
+                modulated_wave[i,points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1))*np.sin(2*np.pi*frequency*t[0:points_per_input])
+                if np.cos(2*np.pi*frequency*t[points_per_input-1]) > 0:
+                    pos_deriv=True
+                else:
+                    pos_deriv = False
+                prev = np.sin(2* np.pi * frequency *t[points_per_input-1])
+        plt.figure()
+        plt.plot(modulated_wave[i])
+        plt.show()
+    return modulated_wave
 
 '''Directories'''
 basedir = 'focus_Ms/'
@@ -58,21 +103,21 @@ for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
 model = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
 
-dev = torch.device('cuda')  # 'cuda' or 'cpu'
+dev = torch.device('cpu')  # 'cuda' or 'cpu'
 print('Running on', dev)
 model.to(dev)   # sending model to GPU/CPU
 
-with open('C:\spins\data\data.p','rb') as data_file:
-    data_dict = pickle.load(data_file)
+# with open('C:\spins\data\data.p','rb') as data_file:
+#     data_dict = pickle.load(data_file)
 high_then_low = torch.cat((torch.ones(300,1),torch.zeros(300,1)))
 low_then_high = torch.cat((torch.zeros(300,1),torch.ones(300,1)))
-# INPUTS = torch.tensor(Bt * fm(np.array([high_then_low,low_then_high]),3e9,5e9,1)).unsqueeze(-1).to(dev)
-# OUTPUTS = torch.tensor([0,1],dtype=torch.long).to(dev) # desired output
-INPUTS = torch.tensor(data_dict['train_inputs']*Bt).unsqueeze(-1).to(dev)
-print("inputs shape: ")
-print(INPUTS.shape)
-OUTPUTS = torch.tensor(data_dict['train_labels'],dtype=torch.long).to(dev) # desired output
-print(OUTPUTS)
+INPUTS = torch.tensor(Bt * fm(np.array([high_then_low,low_then_high]),3e9,5e9,1)).unsqueeze(-1).to(dev)
+OUTPUTS = torch.tensor([0,1],dtype=torch.long).to(dev) # desired output
+# INPUTS = torch.tensor(data_dict['train_inputs']*Bt).unsqueeze(-1).to(dev)
+# print("inputs shape: ")
+# print(INPUTS.shape)
+# OUTPUTS = torch.tensor(data_dict['train_labels'],dtype=torch.long).to(dev) # desired output
+# print(OUTPUTS)
 '''Define optimizer and lossfunction'''
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 def ohe(target_values: torch.Tensor, num_classes: int) -> torch.Tensor:
