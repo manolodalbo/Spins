@@ -15,13 +15,13 @@ mpl.rcParams['figure.figsize'] = [8.0, 6.0]
 mpl.rcParams['figure.dpi'] = 600
 
 
-def plot_loss(loss_iter, plotdir):
+def plot_loss(loss_iter, plotdir,unique_id):
     fig = plt.figure()
     plt.plot(loss_iter, 'o-')
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
-    fig.savefig(plotdir+'loss.png')
+    fig.savefig(plotdir+'loss' + unique_id + '.png')
     plt.close(fig)
 def plot_accuracy(acc_iter, plotdir):
     fig = plt.figure()
@@ -60,7 +60,7 @@ def _plot_sources(sources, ax):
     return markers
 
 
-def geometry(model, ax=None, outline=False, outline_pml=True, epoch=0, plotdir=''):
+def geometry(model, ax=None, outline=False, outline_pml=True, epoch=0, plotdir='',plotname=''):
 
     geom = model.geom
     probes = model.probes
@@ -96,7 +96,7 @@ def geometry(model, ax=None, outline=False, outline_pml=True, epoch=0, plotdir='
     markers += _plot_sources(sources, ax)
         
     if plotdir:
-        fig.savefig(plotdir+'geometry_epoch%d.png' % (epoch))
+        fig.savefig(plotdir+'geometry_epoch%d'% (epoch)+ plotname +'.png')
         plt.close(fig)
 
 
