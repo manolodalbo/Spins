@@ -29,19 +29,19 @@ def load_and_preprocess_data():
     ones = 0
     zeros = 0
     i = 0
-    while ones < 1 or zeros < 1:
-        if train_labels[i] == 1 and ones < 1:
+    while ones < 4 or zeros < 4:
+        if train_labels[i] == 1 and ones < 4:
             refined_inputs.append(train_inputs[i])
             refined_ouputs.append(train_labels[i])
             ones = ones + 1
-        if train_labels[i] == 0 and zeros < 1:
+        if train_labels[i] == 0 and zeros < 4:
             refined_inputs.append(train_inputs[i])
             refined_ouputs.append(train_labels[i])
             zeros = zeros + 1
         i += 1
         
-    train_inputs = fm(np.array(refined_inputs),0.2e9,5e9,10)
-    test_inputs = fm(test_inputs[0:10],0.2e9,5e9,10)
+    train_inputs = fm(np.array(refined_inputs),0.1e9,5e9,3)
+    test_inputs = fm(test_inputs[0:10],0.1e9,5e9,3)
     train_labels = tensor(refined_ouputs)
     print(train_labels.shape)
     print(train_inputs.shape)
@@ -91,8 +91,5 @@ def fm(inputs: np.array, Fi: float, Ff: float,samples_per_point:int) -> np.array
                 else:
                     pos_deriv = False
                 prev = np.sin(2* np.pi * frequency *t[points_per_input-1])
-        plt.figure()
-        plt.plot(modulated_wave[i])
-        plt.show()
     return modulated_wave
 load_and_preprocess_data()
