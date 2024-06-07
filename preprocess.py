@@ -45,12 +45,13 @@ def load_and_preprocess_data():
     zeros=0
     new_test_inputs = []
     new_test_labels = []
-    while ones<50 or zeros<50:
-        if test_labels[i] == 1 and ones < 50:
+    number_of_samples_of_each_class = 160
+    while ones<number_of_samples_of_each_class or zeros<number_of_samples_of_each_class:
+        if test_labels[i] == 1 and ones < number_of_samples_of_each_class:
             new_test_inputs.append(test_inputs[i])
             new_test_labels .append(test_labels[i])
             ones = ones + 1
-        if test_labels[i] == 0 and zeros < 50:
+        if test_labels[i] == 0 and zeros < number_of_samples_of_each_class:
             new_test_inputs.append(test_inputs[i])
             new_test_labels.append(test_labels[i])
             zeros = zeros + 1

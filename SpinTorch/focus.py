@@ -74,11 +74,11 @@ def focus(args):
     INPUTS = torch.tensor(data_dict['train_inputs']*Bt).unsqueeze(-1).to(dev)
     print("inputs shape: ")
     print(INPUTS.shape)
+    print("hello????? what is going on please print out")
     OUTPUTS = torch.tensor(data_dict['train_labels'],dtype=torch.long).to(dev) # desired output
     print(OUTPUTS)
     TEST_INPUTS = torch.tensor(data_dict['test_inputs']*Bt).unsqueeze(-1).to(dev)
     TEST_OUTPUTS = torch.tensor(data_dict['test_labels'],dtype=torch.long).to(dev) # desired output
-
     '''Define optimizer and lossfunction'''
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,betas=(0.5,0.999))
     def ohe(target_values: torch.Tensor, num_classes: int) -> torch.Tensor:
@@ -199,11 +199,17 @@ def focus(args):
                         print("Plotting failed")
             pbar.set_postfix_str(f"Epoch Loss: {epoch_loss:.6f}, Epoch Accuracy: {epoch_accuracy / (b + 1):.6f}")
             print("Epoch finished: %d -- Loss: %.6f -- Accuracy: %f" % (epoch, epoch_loss,epoch_accuracy/(b+1)))
-            with torch.no_grad():
-                test_outputs = model(TEST_INPUTS)
-                test_loss = loss_func(test_outputs,TEST_OUTPUTS)
-                test_accuracy = (test_outputs.argmax(dim=-1)==TEST_OUTPUTS).float().mean()
-                print("Test Loss: %.6f -- Test Accuracy: %f" % (test_loss,test_accuracy))
+            try:
+                with torch.no_grad():
+                    total_test_accuracy = 0
+                    for i in range(TEST_INPUTS.shape[0]//32 -1):
+                        test_outputs = model(TEST_INPUTS[i*32:(i+1)*32])
+                        test_accuracy = (test_outputs.argmax(dim=-1)==TEST_OUTPUTS[i*32:(i+1)*32]).float().mean()
+                        total_test_accuracy += test_accuracy
+                    test_accuracy = total_test_accuracy/(i+1)
+                    print("Test Accuracy: %f" % (test_accuracy))
+            except:
+                print("Test failed")
             toc()   
 
             '''Save model checkpoint'''
