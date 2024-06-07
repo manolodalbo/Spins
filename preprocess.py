@@ -40,15 +40,28 @@ def load_and_preprocess_data():
             refined_ouputs.append(train_labels[i])
             zeros = zeros + 1
         i += 1
+    i = 0
+    ones=0
+    zeros=0
+    new_test_inputs = []
+    new_test_labels = []
+    while ones<50 or zeros<50:
+        if test_labels[i] == 1 and ones < 50:
+            new_test_inputs.append(test_inputs[i])
+            new_test_labels .append(test_labels[i])
+            ones = ones + 1
+        if test_labels[i] == 0 and zeros < 50:
+            new_test_inputs.append(test_inputs[i])
+            new_test_labels.append(test_labels[i])
+            zeros = zeros + 1
+        i+=1
         
     train_inputs = fm(np.array(refined_inputs),0.1e9,5e9,3)
-    test_inputs = fm(test_inputs[0:10],0.1e9,5e9,3)
+    test_inputs = fm(np.array(new_test_inputs),0.1e9,5e9,3)
     train_labels = tensor(refined_ouputs)
-    print(train_labels.shape)
-    print(train_inputs.shape)
-    test_labels = tensor(test_labels)
+    test_labels = tensor(new_test_labels)
     with open(f'C:/spins/data/data.p', 'wb') as pickle_file:
-        pickle.dump(dict(train_inputs=train_inputs,train_labels=train_labels,test_inputs=test_inputs,test_labels=test_labels[0:10]), pickle_file)
+        pickle.dump(dict(train_inputs=train_inputs,train_labels=train_labels,test_inputs=test_inputs,test_labels=test_labels), pickle_file)
     print(f'Data has been dumped into {"C:/spins/data"}/data.p!')
 def fm(inputs: np.array, Fi: float, Ff: float,samples_per_point:int) -> np.array:
     """
@@ -79,14 +92,14 @@ def fm(inputs: np.array, Fi: float, Ff: float,samples_per_point:int) -> np.array
                 phase = np.arcsin(prev)
                 if not pos_deriv:
                     phase = np.pi - phase
-                modulated_wave[i, points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1))*np.sin(2 * np.pi * frequency * t[1:points_per_input+1] + phase)
+                modulated_wave[i, points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (2))*np.sin(2 * np.pi * frequency * t[1:points_per_input+1] + phase)
                 if np.cos(2*np.pi*frequency*t[points_per_input] + phase) > 0:
                     pos_deriv=True
                 else:
                     pos_deriv = False
                 prev = np.sin(2* np.pi * frequency * t[points_per_input] + phase)
             else:
-                modulated_wave[i,points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (1))*np.sin(2*np.pi*frequency*t[0:points_per_input])
+                modulated_wave[i,points_per_input*j:points_per_input*(j+1)] = (0.5 + pixel_intensity * (2))*np.sin(2*np.pi*frequency*t[0:points_per_input])
                 if np.cos(2*np.pi*frequency*t[points_per_input-1]) > 0:
                     pos_deriv=True
                 else:

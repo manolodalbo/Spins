@@ -76,8 +76,11 @@ def focus(args):
     print(INPUTS.shape)
     OUTPUTS = torch.tensor(data_dict['train_labels'],dtype=torch.long).to(dev) # desired output
     print(OUTPUTS)
+    TEST_INPUTS = torch.tensor(data_dict['test_inputs']*Bt).unsqueeze(-1).to(dev)
+    TEST_OUTPUTS = torch.tensor(data_dict['test_labels'],dtype=torch.long).to(dev) # desired output
+
     '''Define optimizer and lossfunction'''
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,betas=(0.5,0.999))
     def ohe(target_values: torch.Tensor, num_classes: int) -> torch.Tensor:
         """
         One-hot encodes the target values.
@@ -155,47 +158,61 @@ def focus(args):
         loss_iter = []
     '''Train the network'''
     print(INPUTS.shape)
-    pbar = tqdm(total=INPUTS.shape[0]//batch_size)
     tic()
-    model.retain_history = True
+    model.retain_history = False
     for epoch in range(epoch_init+1, epochs):
-        for b,b1 in enumerate(range(batch_size,INPUTS.shape[0]+1,batch_size)):
-            b0 = b1 - batch_size
-            u = model(INPUTS[b0:b1])
-            loss = loss_func(u,OUTPUTS[b0:b1])
-            accuracy = (u.argmax(dim=-1)==OUTPUTS).float().mean()
-            stat_cuda('after forward')
-            loss.backward()
-            optimizer.step()
-            stat_cuda('after backward')
-            pbar.set_description(f'Batch {b + 1}/{INPUTS.shape[0]//batch_size}, Loss: {loss.item()}')
-            pbar.update(1)
-        loss_iter.append(loss.item())  # store loss values
-        try:
-            spintorch.plot.plot_loss(loss_iter, plotdir,args.plot_name)
-        except:
-            print("Plotting loss failed")
-        print("Epoch finished: %d -- Loss: %.6f -- Accuracy: %f" % (epoch, loss,accuracy))
-        toc()   
-
-        '''Save model checkpoint'''
-        torch.save({
-                    'epoch': epoch,
-                    'loss_iter': loss_iter,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict()
-                    }, savedir + 'model_e%d' % (epoch) +args.plot_name+'.pt')
-        
-        '''Plot spin-wave propagation'''
-        if model.retain_history:
-            with torch.no_grad():
+        with tqdm(total=INPUTS.shape[0] // batch_size, desc=f"Epoch {epoch + 1}/{epochs}") as pbar:
+            indices = torch.randperm(INPUTS.shape[0],device=dev)
+            INPUTS = INPUTS[indices]
+            OUTPUTS = OUTPUTS[indices]
+            epoch_loss = 0
+            epoch_accuracy = 0
+            for b,b1 in enumerate(range(batch_size,INPUTS.shape[0]+1,batch_size)):
+                b0 = b1 - batch_size
+                u = model(INPUTS[b0:b1])
+                loss = loss_func(u,OUTPUTS[b0:b1])
+                epoch_loss += loss.item()
+                accuracy = (u.argmax(dim=-1)==OUTPUTS[b0:b1]).float().mean()
+                epoch_accuracy += accuracy
+                stat_cuda('after forward')
+                loss.backward()
+                optimizer.step()
+                stat_cuda('after backward')
+                loss_iter.append(loss.item())  # store loss values
+                pbar.set_description(f'Batch {b + 1}/{INPUTS.shape[0]//batch_size}, Loss: {loss.item():.6f}, Accuracy: {accuracy.item():.6f}')
+                pbar.update(1)
                 try:
-                    spintorch.plot.geometry(model, epoch=epoch, plotdir=plotdir,plotname=args.plot_name)
-                    # mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
-                    # wave_snapshot(model, mz[timesteps-1], (plotdir+'snapshot_time%d_epoch%d.png' % (timesteps,epoch)),r"$m_z$")
-                    # wave_snapshot(model, mz[int(timesteps/2)-1], (plotdir+'snapshot_time%d_epoch%d.png' % (int(timesteps/2),epoch)),r"$m_z$")
-                    # wave_integrated(model, mz, (plotdir+'integrated_epoch%d.png' % (epoch)))
+                    spintorch.plot.plot_loss(loss_iter, plotdir,args.plot_name)
                 except:
-                    print("Plotting failed")
+                    print("Plotting loss failed")
+                '''Plot spin-wave propagation'''
+                with torch.no_grad():
+                    try:
+                        spintorch.plot.geometry(model, epoch=epoch, plotdir=plotdir,plotname=args.plot_name)
+                        if model.retain_history:
+                            print("retaining history")
+                            # mz = torch.stack(model.m_history, 1)[0,:,2,]-model.m0[0,2,].unsqueeze(0).cpu()
+                            # wave_snapshot(model, mz[timesteps-1], (plotdir+'snapshot_time%d_epoch%d.png' % (timesteps,epoch)),r"$m_z$")
+                            # wave_snapshot(model, mz[int(timesteps/2)-1], (plotdir+'snapshot_time%d_epoch%d.png' % (int(timesteps/2),epoch)),r"$m_z$")
+                            # wave_integrated(model, mz, (plotdir+'integrated_epoch%d.png' % (epoch)))
+                    except:
+                        print("Plotting failed")
+            pbar.set_postfix_str(f"Epoch Loss: {epoch_loss:.6f}, Epoch Accuracy: {epoch_accuracy / (b + 1):.6f}")
+            print("Epoch finished: %d -- Loss: %.6f -- Accuracy: %f" % (epoch, epoch_loss,epoch_accuracy/(b+1)))
+            with torch.no_grad():
+                test_outputs = model(TEST_INPUTS)
+                test_loss = loss_func(test_outputs,TEST_OUTPUTS)
+                test_accuracy = (test_outputs.argmax(dim=-1)==TEST_OUTPUTS).float().mean()
+                print("Test Loss: %.6f -- Test Accuracy: %f" % (test_loss,test_accuracy))
+            toc()   
+
+            '''Save model checkpoint'''
+            torch.save({
+                        'epoch': epoch,
+                        'loss_iter': loss_iter,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict()
+                        }, savedir + 'model_e%d' % (epoch) +args.plot_name+'.pt')
+            
 if __name__ == '__main__':
     focus(parseArgs())
