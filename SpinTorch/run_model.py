@@ -14,7 +14,7 @@ B0 = 60e-3  # bias field (T)
 Bt = 1e-3  # excitation field amplitude (T)
 
 dt = 20e-12  # timestep (s)
-batch_size = 32
+batch_size = 64
 """Directories"""
 basedir = "focus_Ms/"
 plotdir = "plots/" + basedir
@@ -42,7 +42,7 @@ dev_name = "cuda" if torch.cuda.is_available() else "cpu"
 dev = torch.device(dev_name)  # 'cuda' or 'cpu'
 print("Running on", dev)
 model.load_state_dict(
-    torch.load("C:/spins/Spins/models/focus_Ms/model_e25points0.04Bt.pt")[
+    torch.load("C:/spins/Spins/models/focus_Ms/model_e13nine_low_points_low_lr.pt")[
         "model_state_dict"
     ]
 )
@@ -54,10 +54,10 @@ print(TEST_INPUTS.shape)
 TEST_LABELS = data_dict["test_labels"].to(dev)
 with torch.no_grad():
     total_test_accuracy = 0
-    for i in range(TEST_INPUTS.shape[0] // 32 - 1):
-        test_outputs = model(TEST_INPUTS[i * 32 : (i + 1) * 32])
+    for i in range(TEST_INPUTS.shape[0] // 64 - 1):
+        test_outputs = model(TEST_INPUTS[i * 64 : (i + 1) * 64])
         test_accuracy = (
-            (test_outputs.argmax(dim=-1) == TEST_LABELS[i * 32 : (i + 1) * 32])
+            (test_outputs.argmax(dim=-1) == TEST_LABELS[i * 64 : (i + 1) * 64])
             .float()
             .mean()
         )

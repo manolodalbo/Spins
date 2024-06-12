@@ -12,8 +12,8 @@ def parseArgs() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--points", type=int, default=3)
     parser.add_argument("--pooling", type=bool, default=False)
-    parser.add_argument("--min_freq", type=float, default=0.4e9)
-    parser.add_argument("--max_freq", type=float, default=15e9)
+    parser.add_argument("--min_freq", type=float, default=1e9)
+    parser.add_argument("--max_freq", type=float, default=6e9)
     parser.add_argument("--size", type=int, default=320)
     parser.add_argument("--all_classes", type=bool, default=False)
     args = parser.parse_args()
@@ -33,6 +33,8 @@ def load_and_preprocess_data(args: argparse.Namespace):
     print(train_inputs.shape)
     if args.pooling:
         train_inputs = pool(train_inputs)
+        print("shape of train inputs after pooling:")
+        print(train_inputs.shape)
         test_inputs = pool(test_inputs)
     dig_train_inputs = (
         train_inputs.reshape(-1, train_inputs.shape[-1] * train_inputs.shape[-2]) / 255
@@ -45,16 +47,21 @@ def load_and_preprocess_data(args: argparse.Namespace):
     if args.all_classes == False:
         ones = 0
         zeros = 0
+        twos = 0
         i = 0
-        while ones < args.size // 2 or zeros < args.size // 2:
-            if train_labels[i] == 1 and ones < args.size // 2:
+        while ones < args.size // 3 or zeros < args.size // 3:
+            if train_labels[i] == 1 and ones < args.size // 3:
                 refined_inputs.append(dig_train_inputs[i])
                 refined_ouputs.append(train_labels[i])
                 ones = ones + 1
-            if train_labels[i] == 0 and zeros < args.size // 2:
+            if train_labels[i] == 0 and zeros < args.size // 3:
                 refined_inputs.append(dig_train_inputs[i])
                 refined_ouputs.append(train_labels[i])
                 zeros = zeros + 1
+            if train_labels[i] == 2 and twos < args.size // 3:
+                refined_inputs.append(dig_train_inputs[i])
+                refined_ouputs.append(train_labels[i])
+                twos = twos + 1
             i += 1
     else:
         refined_inputs = dig_train_inputs[0 : args.size]
@@ -65,12 +72,14 @@ def load_and_preprocess_data(args: argparse.Namespace):
         i = 0
         ones = 0
         zeros = 0
+        twos = 0
         number_of_samples_of_each_class = (
-            int(0.2 * args.size) // 2 if int(0.2 * args.size) >= 320 else 160
+            int(0.2 * args.size) // 3 if int(0.2 * args.size) // 3 >= 160 else 160
         )
         while (
             ones < number_of_samples_of_each_class
             or zeros < number_of_samples_of_each_class
+            or twos < number_of_samples_of_each_class
         ):
             if test_labels[i] == 1 and ones < number_of_samples_of_each_class:
                 new_test_inputs.append(dig_test_inputs[i])
@@ -80,6 +89,10 @@ def load_and_preprocess_data(args: argparse.Namespace):
                 new_test_inputs.append(dig_test_inputs[i])
                 new_test_labels.append(test_labels[i])
                 zeros = zeros + 1
+            if test_labels[i] == 2 and twos < number_of_samples_of_each_class:
+                new_test_inputs.append(dig_test_inputs[i])
+                new_test_labels.append(test_labels[i])
+                twos = twos + 1
             i += 1
     else:
         testing_size = int(0.2 * args.size) if int(0.2 * args.size) >= 320 else 320
@@ -144,7 +157,7 @@ def fm(inputs: np.array, Fi: float, Ff: float, samples_per_point: int) -> np.arr
                 if not pos_deriv:
                     phase = np.pi - phase
                 modulated_wave[i, points_per_input * j : points_per_input * (j + 1)] = (
-                    0.5 + pixel_intensity * (4.5)
+                    0.5 + pixel_intensity * (2)
                 ) * np.sin(2 * np.pi * frequency * t[1 : points_per_input + 1] + phase)
                 if np.cos(2 * np.pi * frequency * t[points_per_input] + phase) > 0:
                     pos_deriv = True
@@ -153,7 +166,7 @@ def fm(inputs: np.array, Fi: float, Ff: float, samples_per_point: int) -> np.arr
                 prev = np.sin(2 * np.pi * frequency * t[points_per_input] + phase)
             else:
                 modulated_wave[i, points_per_input * j : points_per_input * (j + 1)] = (
-                    0.5 + pixel_intensity * (4.5)
+                    0.5 + pixel_intensity * (2)
                 ) * np.sin(2 * np.pi * frequency * t[0:points_per_input])
                 if np.cos(2 * np.pi * frequency * t[points_per_input - 1]) > 0:
                     pos_deriv = True
@@ -165,14 +178,18 @@ def fm(inputs: np.array, Fi: float, Ff: float, samples_per_point: int) -> np.arr
 
 def pool(inputs: np.array):
     """Performs average pooling on image, effectively cutting down the resolution. For
-    mnist this means going from 28 by 28 to 14 by 14"""
+    mnist this means going from 28 by 28 to 14 by 14 for 2 by 2 pooling with a stride of 2.
+    """
     inputs = tensor(inputs, dtype=torch.float32)
     inputs = inputs.unsqueeze(1)
+    show_image(inputs[0].squeeze().numpy())
     # the output width and heigh is governed by the following equation assuming no padding:
     # w_f = (w_i + filter_width)/stride and the same for heigh
-    pooling_layer = torch.nn.AvgPool2d(kernel_size=(2, 2), stride=2, padding=0)
+    pooling_layer = torch.nn.AvgPool2d(kernel_size=(4, 4), stride=4, padding=0)
     pooled = pooling_layer(inputs).squeeze()
+    show_image(pooled[0].numpy())
     to_return = pooled.numpy()
+
     return to_return
 
 

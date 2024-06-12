@@ -63,7 +63,7 @@ def focus(args):
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
     epochs = args.epochs
-    Np = 2  # number of probes
+    Np = 3  # number of probes
     for p in range(Np):
         probes.append(
             spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
@@ -84,9 +84,7 @@ def focus(args):
     TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
     TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
     """Define optimizer and lossfunction"""
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=learning_rate, betas=(0.5, 0.999)
-    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     def ohe(target_values: torch.Tensor, num_classes: int) -> torch.Tensor:
         """
@@ -125,7 +123,6 @@ def focus(args):
 
     def their_loss(output, target_index):
         output = output / output.sum(dim=-1).unsqueeze(-1)
-        print(output)
         return torch.nn.functional.cross_entropy(output, target_index)
 
     def loss_combo(output, target_index):
@@ -154,6 +151,10 @@ def focus(args):
         print(preds)
         loss = torch.nn.functional.binary_cross_entropy(preds, ohe)
         return loss
+    def original_loss(output, target_index):
+        target_value = output[:,target_index]
+        loss = output.sum(dim=1)/target_value - 1
+        return (loss.sum()/loss.size()[0]).log10()
 
     def return_loss(loss: str):
         mapping = {
@@ -163,6 +164,7 @@ def focus(args):
             "their_loss": their_loss,
             "loss_combo": loss_combo,
             "div_loss": div_loss,
+            "original": original_loss,
         }
         return mapping.get(loss, log_loss_norm)
 
@@ -182,6 +184,7 @@ def focus(args):
     print(INPUTS.shape)
     tic()
     model.retain_history = False
+    high_accuracy = 0
     for epoch in range(epoch_init + 1, epochs):
         with tqdm(
             total=INPUTS.shape[0] // batch_size, desc=f"Epoch {epoch + 1}/{epochs}"
@@ -198,6 +201,15 @@ def focus(args):
                 epoch_loss += loss.item()
                 accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
                 epoch_accuracy += accuracy
+                if accuracy > high_accuracy:
+                    torch.save(
+                        {
+                            "epoch": epoch,
+                            "loss_iter": loss_iter,
+                            "model_state_dict": model.state_dict(),
+                        },
+                        savedir + "model_highest_accuracy" + args.plot_name + ".pt",
+                    )
                 stat_cuda("after forward")
                 loss.backward()
                 optimizer.step()
@@ -235,12 +247,16 @@ def focus(args):
             try:
                 with torch.no_grad():
                     total_test_accuracy = 0
-                    for i in range(TEST_INPUTS.shape[0] // 32 - 1):
-                        test_outputs = model(TEST_INPUTS[i * 32 : (i + 1) * 32])
+                    for i in range(TEST_INPUTS.shape[0] // args.batch_size - 1):
+                        test_outputs = model(
+                            TEST_INPUTS[i * args.batch_size : (i + 1) * args.batch_size]
+                        )
                         test_accuracy = (
                             (
                                 test_outputs.argmax(dim=-1)
-                                == TEST_OUTPUTS[i * 32 : (i + 1) * 32]
+                                == TEST_OUTPUTS[
+                                    i * args.batch_size : (i + 1) * args.batch_size
+                                ]
                             )
                             .float()
                             .mean()

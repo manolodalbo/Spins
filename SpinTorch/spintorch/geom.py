@@ -26,7 +26,7 @@ class WaveGeometryFreeForm(WaveGeometry):
 
         super().__init__(dim, d, B0, Ms)
 
-        self.rho = nn.Parameter(torch.normal(mean=0, std=10e-3, size=dim))
+        self.rho = nn.Parameter(torch.normal(mean=0, std=1e-3, size=dim))
         self.register_buffer("B", zeros((3,) + dim))
         self.register_buffer("B1", tensor(B1))
         self.B[1,] = self.B0
