@@ -185,7 +185,7 @@ def pool(inputs: np.array):
     show_image(inputs[0].squeeze().numpy())
     # the output width and heigh is governed by the following equation assuming no padding:
     # w_f = (w_i + filter_width)/stride and the same for heigh
-    pooling_layer = torch.nn.AvgPool2d(kernel_size=(4, 4), stride=4, padding=0)
+    pooling_layer = torch.nn.AvgPool2d(kernel_size=(2, 2), stride=2, padding=0)
     pooled = pooling_layer(inputs).squeeze()
     show_image(pooled[0].numpy())
     to_return = pooled.numpy()

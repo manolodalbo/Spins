@@ -3,10 +3,7 @@
 import torch
 import os
 import spintorch
-import numpy as np
 from spintorch.utils import tic, toc, stat_cuda
-from spintorch.plot import wave_integrated, wave_snapshot
-import matplotlib.pyplot as plt
 import pickle
 from tqdm import tqdm
 import argparse
@@ -18,11 +15,11 @@ def parseArgs():
     parser.add_argument("--epochs", type=int, default=400)
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--loss", type=str, default="bce")
     parser.add_argument("--plot_name", type=str, default="")
     parser.add_argument("--Bt", type=float, default=1e-3)
     args = parser.parse_args()
     return args
+
 
 def create_solver(args):
     """Parameters"""
@@ -49,6 +46,7 @@ def create_solver(args):
         )
     film = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
     return film
+
 
 def focus(args):
     Bt = args.Bt  # excitation field amplitude (T)
