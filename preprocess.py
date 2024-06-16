@@ -16,6 +16,8 @@ def parseArgs() -> argparse.Namespace:
     parser.add_argument("--max_freq", type=float, default=6e9)
     parser.add_argument("--size", type=int, default=320)
     parser.add_argument("--all_classes", type=bool, default=False)
+    parser.add_argument("--num", type=int, default=0)
+
     args = parser.parse_args()
     return args
 
@@ -45,23 +47,18 @@ def load_and_preprocess_data(args: argparse.Namespace):
     refined_inputs = []
     refined_ouputs = []
     if args.all_classes == False:
-        ones = 0
         zeros = 0
-        twos = 0
+        others = 0
         i = 0
-        while ones < args.size // 3 or zeros < args.size // 3:
-            if train_labels[i] == 1 and ones < args.size // 3:
-                refined_inputs.append(dig_train_inputs[i])
-                refined_ouputs.append(train_labels[i])
-                ones = ones + 1
-            if train_labels[i] == 0 and zeros < args.size // 3:
+        while zeros < args.size // 2 or others < args.size // 2:
+            if train_labels[i] == args.num and zeros < args.size // 2:
                 refined_inputs.append(dig_train_inputs[i])
                 refined_ouputs.append(train_labels[i])
                 zeros = zeros + 1
-            if train_labels[i] == 2 and twos < args.size // 3:
+            if train_labels[i] != args.num and others < args.size // 2:
                 refined_inputs.append(dig_train_inputs[i])
                 refined_ouputs.append(train_labels[i])
-                twos = twos + 1
+                others = others + 1
             i += 1
     else:
         refined_inputs = dig_train_inputs[0 : args.size]
@@ -70,29 +67,23 @@ def load_and_preprocess_data(args: argparse.Namespace):
     new_test_labels = []
     if args.all_classes == False:
         i = 0
-        ones = 0
         zeros = 0
-        twos = 0
+        others = 0
         number_of_samples_of_each_class = (
             int(0.2 * args.size) // 3 if int(0.2 * args.size) // 3 >= 160 else 160
         )
         while (
-            ones < number_of_samples_of_each_class
+            others < number_of_samples_of_each_class
             or zeros < number_of_samples_of_each_class
-            or twos < number_of_samples_of_each_class
         ):
-            if test_labels[i] == 1 and ones < number_of_samples_of_each_class:
-                new_test_inputs.append(dig_test_inputs[i])
-                new_test_labels.append(test_labels[i])
-                ones = ones + 1
-            if test_labels[i] == 0 and zeros < number_of_samples_of_each_class:
-                new_test_inputs.append(dig_test_inputs[i])
-                new_test_labels.append(test_labels[i])
+            if train_labels[i] == args.num and zeros < args.size // 2:
+                new_test_inputs.append(dig_train_inputs[i])
+                new_test_labels.append(train_labels[i])
                 zeros = zeros + 1
-            if test_labels[i] == 2 and twos < number_of_samples_of_each_class:
-                new_test_inputs.append(dig_test_inputs[i])
-                new_test_labels.append(test_labels[i])
-                twos = twos + 1
+            if train_labels[i] != args.num and others < args.size // 2:
+                new_test_inputs.append(dig_train_inputs[i])
+                new_test_labels.append(train_labels[i])
+                others = others + 1
             i += 1
     else:
         testing_size = int(0.2 * args.size) if int(0.2 * args.size) >= 320 else 320
@@ -106,25 +97,34 @@ def load_and_preprocess_data(args: argparse.Namespace):
     )
     train_labels = tensor(refined_ouputs, dtype=torch.long)
     test_labels = tensor(new_test_labels, dtype=torch.long)
-    print("train_inputs shape: ")
-    print(train_inputs.shape)
-    print("test_inputs shape: ")
-    print(test_inputs.shape)
-    print("train_labels shape: ")
-    print(train_labels.shape)
-    with open(f"C:/spins/data/data.p", "wb") as pickle_file:
-        pickle.dump(
-            dict(
-                train_inputs=train_inputs,
-                train_labels=train_labels,
-                test_inputs=test_inputs,
-                test_labels=test_labels,
-                dig_train_inputs=refined_inputs,
-                dig_test_inputs=new_test_inputs,
-            ),
-            pickle_file,
-        )
-    print(f'Data has been dumped into {"C:/spins/data"}/data.p!')
+    if args.all_classes == False:
+        with open(f"C:/spins/data/data_{args.num}.p", "wb") as pickle_file:
+            pickle.dump(
+                dict(
+                    train_inputs=train_inputs,
+                    train_labels=train_labels,
+                    test_inputs=test_inputs,
+                    test_labels=test_labels,
+                    dig_train_inputs=refined_inputs,
+                    dig_test_inputs=new_test_inputs,
+                ),
+                pickle_file,
+            )
+        print(f'Data has been dumped into {"C:/spins/data"}/data_{args.num}.p!')
+    else:
+        with open(f"C:/spins/data/data.p", "wb") as pickle_file:
+            pickle.dump(
+                dict(
+                    train_inputs=train_inputs,
+                    train_labels=train_labels,
+                    test_inputs=test_inputs,
+                    test_labels=test_labels,
+                    dig_train_inputs=refined_inputs,
+                    dig_test_inputs=new_test_inputs,
+                ),
+                pickle_file,
+            )
+        print(f'Data has been dumped into {"C:/spins/data"}/data.p!')
 
 
 def fm(inputs: np.array, Fi: float, Ff: float, samples_per_point: int) -> np.array:

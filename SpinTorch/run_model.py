@@ -11,7 +11,7 @@ ny = 100  # size y    (cells)
 
 Ms = 140e3  # saturation magnetization (A/m)
 B0 = 60e-3  # bias field (T)
-Bt = 1e-3  # excitation field amplitude (T)
+Bt = 0.01  # excitation field amplitude (T)
 
 dt = 20e-12  # timestep (s)
 batch_size = 64
@@ -42,22 +42,27 @@ dev_name = "cuda" if torch.cuda.is_available() else "cpu"
 dev = torch.device(dev_name)  # 'cuda' or 'cpu'
 print("Running on", dev)
 model.load_state_dict(
-    torch.load("C:/spins/Spins/models/focus_Ms/model_e13nine_low_points_low_lr.pt")[
+    torch.load("C:/spins/Spins/models/focus_Ms/model_lowest_losszero.pt")[
         "model_state_dict"
     ]
 )
-model.to(dev)  # sending model to GPU/CPU
-with open("C:\spins\data\data.p", "rb") as data_file:
+number = 0
+model.to(dev)  # sending model to GPU/CPUn
+with open(f"C:\spins\data\data_{number}.p", "rb") as data_file:
     data_dict = pickle.load(data_file)
 TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
 print(TEST_INPUTS.shape)
-TEST_LABELS = data_dict["test_labels"].to(dev)
+TEST_LABELS = (data_dict["test_labels"] == number).long().to(dev)
+
 with torch.no_grad():
     total_test_accuracy = 0
-    for i in range(TEST_INPUTS.shape[0] // 64 - 1):
-        test_outputs = model(TEST_INPUTS[i * 64 : (i + 1) * 64])
+    for i in range(TEST_INPUTS.shape[0] // batch_size - 1):
+        test_outputs = model(TEST_INPUTS[i * batch_size : (i + 1) * batch_size])
         test_accuracy = (
-            (test_outputs.argmax(dim=-1) == TEST_LABELS[i * 64 : (i + 1) * 64])
+            (
+                test_outputs.argmax(dim=-1)
+                == TEST_LABELS[i * batch_size : (i + 1) * batch_size]
+            )
             .float()
             .mean()
         )
