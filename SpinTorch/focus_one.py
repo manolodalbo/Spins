@@ -63,17 +63,14 @@ def focus(args):
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
     model.to(dev)  # sending model to GPU/CPU
-    with open(f"C:\spins\data\data_{args.number}.p", "rb") as data_file:
+    with open(f"C:\spins\data\data.p", "rb") as data_file:
         data_dict = pickle.load(data_file)
     INPUTS = torch.tensor(data_dict["train_inputs"] * Bt).unsqueeze(-1).to(dev)
     OUTPUTS = data_dict["train_labels"]  # all classes in outputs
-    OUTPUTS = (OUTPUTS == args.number).int()
-    print(OUTPUTS.shape)
+    print(OUTPUTS)
     OUTPUTS = OUTPUTS.to(dev)
     TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
-    TEST_OUTPUTS = (
-        (data_dict["test_labels"] == args.number).long().to(dev)
-    )  # desired output
+    TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
     """Define optimizer and lossfunction"""
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     epoch_init = -1
@@ -147,45 +144,49 @@ def focus(args):
                 "Epoch finished: %d -- Loss: %.6f -- Accuracy: %f"
                 % (epoch, epoch_loss, epoch_accuracy / (b + 1))
             )
-            try:
-                with torch.no_grad():
-                    total_positives = 0
-                    total_positive_accurate = 0
-                    total_test_accuracy = 0
-                    for i in range(TEST_INPUTS.shape[0] // args.batch_size - 1):
-                        test_outputs = model(
-                            TEST_INPUTS[i * args.batch_size : (i + 1) * args.batch_size]
-                        )
-                        test_accuracy = (
-                            (
-                                test_outputs.argmax(dim=-1)
-                                == TEST_OUTPUTS[
-                                    i * args.batch_size : (i + 1) * args.batch_size
-                                ]
-                            )
-                            .float()
-                            .mean()
-                        )
-                        total_test_accuracy += test_accuracy
-                        for j in range(test_outputs.shape[0]):
-                            if (
-                                TEST_OUTPUTS[
-                                    i * args.batch_size : (i + 1) * args.batch_size
-                                ][j]
-                                == 1
-                            ):
-                                total_positives += 1
-                                if test_outputs[j].argmax() == 1:
-                                    total_positive_accurate += 1
+        try:
+            with torch.no_grad():
+                total_positives = 0
+                total_positive_accurate = 0
+                total_test_accuracy = 0.0
 
-                    test_accuracy = total_test_accuracy / (i + 1)
-                    print("Test Accuracy: %f" % (test_accuracy))
-                    print(
-                        "Positive Accuracy: %f"
-                        % (total_positive_accurate / total_positives)
+                num_batches = TEST_INPUTS.shape[0] // batch_size
+                for i in range(num_batches):
+                    test_batch_inputs = TEST_INPUTS[
+                        i * batch_size : (i + 1) * batch_size
+                    ]
+                    test_batch_outputs = TEST_OUTPUTS[
+                        i * batch_size : (i + 1) * batch_size
+                    ]
+
+                    test_outputs = model(test_batch_inputs)
+                    batch_accuracy = (
+                        (test_outputs.argmax(dim=-1) == test_batch_outputs)
+                        .float()
+                        .mean()
+                        .item()
                     )
-            except:
-                print("Test failed")
+                    total_test_accuracy += batch_accuracy
+
+                    # Count positives and accurate positives
+                    for j in range(test_outputs.shape[0]):
+                        if test_batch_outputs[j] == 1:
+                            total_positives += 1
+                            if test_outputs[j].argmax() == 1:
+                                total_positive_accurate += 1
+
+                # Calculate average test accuracy
+                avg_test_accuracy = total_test_accuracy / num_batches
+                print(f"Test Accuracy: {avg_test_accuracy:.6f}")
+
+                # Calculate positive accuracy
+                if total_positives > 0:
+                    positive_accuracy = total_positive_accurate / total_positives
+                    print(f"Positive Accuracy: {positive_accuracy:.6f}")
+                else:
+                    print("No positive samples in test set.")
+        except Exception as e:
+            print(f"Test failed: {e}")
             toc()
 
             """Save model checkpoint"""

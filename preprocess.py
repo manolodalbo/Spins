@@ -22,6 +22,18 @@ def parseArgs() -> argparse.Namespace:
     return args
 
 
+def filter_classes(inputs, labels, keep_classes):
+    mask = np.isin(labels, keep_classes)
+    filtered_inputs = inputs[mask]
+    filtered_labels = labels[mask]
+    return filtered_inputs, filtered_labels
+
+
+def remap_labels(labels, mapping):
+    mapped_labels = np.vectorize(mapping.get)(labels)
+    return mapped_labels
+
+
 def load_and_preprocess_data(args: argparse.Namespace):
     """This is where we load in and preprocess our data! We load in the data
         for you but you'll need to flatten the images, normalize the values and
@@ -32,7 +44,12 @@ def load_and_preprocess_data(args: argparse.Namespace):
     (train_inputs, train_labels), (test_inputs, test_labels) = (
         tf.keras.datasets.mnist.load_data()
     )
-    print(train_inputs.shape)
+    keep_classes = [2, 3, 4, 6, 7, 9]
+    label_mapping = {2: 0, 3: 1, 4: 2, 6: 3, 7: 4, 9: 5}
+    test_inputs, test_labels = filter_classes(test_inputs, test_labels, keep_classes)
+    train_inputs, train_labels = filter_classes(
+        train_inputs, train_labels, keep_classes
+    )
     if args.pooling:
         train_inputs = pool(train_inputs)
         print("shape of train inputs after pooling:")
@@ -62,7 +79,7 @@ def load_and_preprocess_data(args: argparse.Namespace):
             i += 1
     else:
         refined_inputs = dig_train_inputs[0 : args.size]
-        refined_ouputs = train_labels[0 : args.size]
+        refined_ouputs = remap_labels(train_labels[0 : args.size], label_mapping)
     new_test_inputs = []
     new_test_labels = []
     if args.all_classes == False:
@@ -76,11 +93,11 @@ def load_and_preprocess_data(args: argparse.Namespace):
             others < number_of_samples_of_each_class
             or zeros < number_of_samples_of_each_class
         ):
-            if train_labels[i] == args.num and zeros < args.size // 2:
+            if train_labels[i] == args.num and zeros < number_of_samples_of_each_class:
                 new_test_inputs.append(dig_train_inputs[i])
                 new_test_labels.append(train_labels[i])
                 zeros = zeros + 1
-            if train_labels[i] != args.num and others < args.size // 2:
+            if train_labels[i] != args.num and others < number_of_samples_of_each_class:
                 new_test_inputs.append(dig_train_inputs[i])
                 new_test_labels.append(train_labels[i])
                 others = others + 1
@@ -88,7 +105,7 @@ def load_and_preprocess_data(args: argparse.Namespace):
     else:
         testing_size = int(0.2 * args.size) if int(0.2 * args.size) >= 320 else 320
         new_test_inputs = dig_test_inputs[0:testing_size]
-        new_test_labels = test_labels[0:testing_size]
+        new_test_labels = remap_labels(test_labels[0:testing_size], label_mapping)
     train_inputs = fm(
         np.array(refined_inputs), args.min_freq, args.max_freq, args.points
     )
