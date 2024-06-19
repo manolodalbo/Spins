@@ -44,8 +44,8 @@ def load_and_preprocess_data(args: argparse.Namespace):
     (train_inputs, train_labels), (test_inputs, test_labels) = (
         tf.keras.datasets.mnist.load_data()
     )
-    keep_classes = [2, 3, 4, 6, 7, 9]
-    label_mapping = {2: 0, 3: 1, 4: 2, 6: 3, 7: 4, 9: 5}
+    keep_classes = [6, 7]
+    label_mapping = {6: 0, 7: 1}
     test_inputs, test_labels = filter_classes(test_inputs, test_labels, keep_classes)
     train_inputs, train_labels = filter_classes(
         train_inputs, train_labels, keep_classes
