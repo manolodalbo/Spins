@@ -2,6 +2,7 @@ import torch
 import spintorch
 import pickle
 
+add_noise = True
 """Parameters"""
 dx = 50e-9  # discretization (m)
 dy = 50e-9  # discretization (m)
@@ -42,10 +43,18 @@ dev_name = "cuda" if torch.cuda.is_available() else "cpu"
 dev = torch.device(dev_name)  # 'cuda' or 'cpu'
 print("Running on", dev)
 model.load_state_dict(
-    torch.load("C:/spins/Spins/models/focus_Ms/model_lowest_losszero.pt")[
+    torch.load("C:/spin/models/focus_Ms/model_lowest_loss6v7largertraining.pt",map_location=torch.device('cpu'))[
         "model_state_dict"
     ]
 )
+if add_noise:
+    with torch.no_grad():
+        for name,param in model.named_parameters():
+            if name == "geom.rho":
+                spintorch.plot.geometry(model,epoch=-1,plotdir=plotdir)
+                noise = torch.normal(mean=0.0, std=0.005,size=param.size(),device=param.device)
+                param.add_(noise)
+                spintorch.plot.geometry(model,epoch=-2  ,plotdir=plotdir)
 number = 0
 model.to(dev)  # sending model to GPU/CPUn
 with open(f"C:\spins\data\data_{number}.p", "rb") as data_file:
