@@ -114,6 +114,7 @@ def focus(args):
                         },
                         savedir + "model_highest_accuracy" + args.plot_name + ".pt",
                     )
+                    high_accuracy = accuracy
                 if loss.item() < max_loss:
                     torch.save(
                         {
@@ -190,15 +191,15 @@ def focus(args):
             toc()
 
             """Save model checkpoint"""
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "loss_iter": loss_iter,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                },
-                savedir + "model_e%d" % (epoch) + args.plot_name + ".pt",
-            )
+        torch.save(
+            {
+                "epoch": epoch,
+                "loss_iter": loss_iter,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+            },
+            savedir + "model_e%d" % (epoch) + args.plot_name + ".pt",
+        )
 
 
 if __name__ == "__main__":

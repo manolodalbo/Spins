@@ -43,25 +43,34 @@ dev_name = "cuda" if torch.cuda.is_available() else "cpu"
 dev = torch.device(dev_name)  # 'cuda' or 'cpu'
 print("Running on", dev)
 model.load_state_dict(
-    torch.load("C:/spin/models/focus_Ms/model_lowest_loss6v7largertraining.pt",map_location=torch.device('cpu'))[
+    torch.load("C:/spins/Spins/models/focus_Ms/model_e16v7largelr0.001.pt")[
         "model_state_dict"
     ]
 )
 if add_noise:
     with torch.no_grad():
-        for name,param in model.named_parameters():
+        for name, param in model.named_parameters():
             if name == "geom.rho":
-                spintorch.plot.geometry(model,epoch=-1,plotdir=plotdir)
-                noise = torch.normal(mean=0.0, std=0.005,size=param.size(),device=param.device)
+                spintorch.plot.geometry(model, epoch=-1, plotdir=plotdir)
+                noise = torch.normal(
+                    mean=0.0, std=0.005, size=param.size(), device=param.device
+                )
                 param.add_(noise)
-                spintorch.plot.geometry(model,epoch=-2  ,plotdir=plotdir)
+                spintorch.plot.geometry(model, epoch=-2, plotdir=plotdir)
+            elif name == "Alpha.Rho":
+                print(param)
+                spintorch.plot.damping(model, plotdir=plotdir)
+                noise = torch.normal(
+                    mean=0.0, std=0.005, size=param.size(), device=param.device
+                )
+                param.add_(noise)
 number = 0
 model.to(dev)  # sending model to GPU/CPUn
-with open(f"C:\spins\data\data_{number}.p", "rb") as data_file:
+with open(f"C:\spins\data\data.p", "rb") as data_file:
     data_dict = pickle.load(data_file)
 TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
 print(TEST_INPUTS.shape)
-TEST_LABELS = (data_dict["test_labels"] == number).long().to(dev)
+TEST_LABELS = data_dict["test_labels"].long().to(dev)
 
 with torch.no_grad():
     total_test_accuracy = 0
