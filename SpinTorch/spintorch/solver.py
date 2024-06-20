@@ -86,7 +86,6 @@ class MMSolver(nn.Module):
             if self.retain_history and self.fwd:
                 self.m_history.append(m.detach().cpu())
         return outputs, m
-        
     def inject_sources(self, B_ext, sig): 
         """Add the excitation signal components to B_ext
         Called in run_stage for every loop through the signal
