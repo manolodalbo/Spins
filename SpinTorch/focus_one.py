@@ -14,10 +14,8 @@ def parseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=400)
     parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--plot_name", type=str, default="")
     parser.add_argument("--Bt", type=float, default=1e-3)
-    parser.add_argument("--number", type=int, default=0)
     args = parser.parse_args()
     return args
 
@@ -33,15 +31,15 @@ def focus(args):
     Ms = 140e3  # saturation magnetization (A/m)
     B0 = 60e-3  # bias field (T)
 
-    dt = 20e-12  # timestep (s)
-    batch_size = args.batch_size
+    dt = 1 / (1600 * 3e6)  # timestep (s)
+    batch_size = 6
 
     B1 = 50e-3  # training field multiplier (T)
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
     # geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
-    Np = 2  # number of probes
+    Np = 3  # number of probes
     for p in range(Np):
         probes.append(
             spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
@@ -50,7 +48,7 @@ def focus(args):
     Bt = args.Bt  # excitation field amplitude (T)
     learning_rate = args.learning_rate
     epochs = args.epochs
-    batch_size = args.batch_size
+    batch_size = 6
     """Directories"""
     basedir = "focus_Ms/"
     plotdir = "plots/" + basedir
@@ -66,12 +64,12 @@ def focus(args):
     model.to(dev)  # sending model to GPU/CPU
     with open(f"C:\spins\data\data.p", "rb") as data_file:
         data_dict = pickle.load(data_file)
-    INPUTS = torch.tensor(data_dict["train_inputs"] * Bt).unsqueeze(-1).to(dev)
-    OUTPUTS = data_dict["train_labels"]  # all classes in outputs
-    print(OUTPUTS)
+    INPUTS = (data_dict["signals"] * Bt).unsqueeze(-1).to(dev)
+    OUTPUTS = data_dict["labels"]  # all classes in outputs
+    print(OUTPUTS.shape)
     OUTPUTS = OUTPUTS.to(dev)
-    TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
-    TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
+    TEST_INPUTS = (data_dict["test_signals"] * Bt).unsqueeze(-1).to(dev)
+    TEST_OUTPUTS = data_dict["labels"].to(dev)  # desired output
     """Define optimizer and lossfunction"""
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     epoch_init = -1
@@ -83,12 +81,9 @@ def focus(args):
     high_accuracy = 0
     max_loss = 1000
 
-    def bce(output, target_index):
-        target_index = target_index.long()
-        ohe = torch.nn.functional.one_hot(target_index, 2).float()
-        preds = output / (output.sum(dim=-1).unsqueeze(-1))
-        loss = torch.nn.functional.binary_cross_entropy(preds, ohe)
-        return loss
+    def loss_func(output, target_index):
+        output = output / output.sum(dim=-1).unsqueeze(-1)
+        return torch.nn.functional.cross_entropy(output, target_index)
 
     for epoch in range(epoch_init + 1, epochs):
         with tqdm(
@@ -102,7 +97,7 @@ def focus(args):
             for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
                 b0 = b1 - batch_size
                 u = model(INPUTS[b0:b1])
-                loss = bce(u, OUTPUTS[b0:b1])
+                loss = loss_func(u, OUTPUTS[b0:b1])
                 epoch_loss += loss.item()
                 accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
                 epoch_accuracy += accuracy
