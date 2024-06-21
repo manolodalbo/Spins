@@ -38,6 +38,7 @@ def focus(args):
 
     B1 = 50e-3  # training field multiplier (T)
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
+    # geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
     Np = 2  # number of probes

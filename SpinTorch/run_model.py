@@ -2,7 +2,7 @@ import torch
 import spintorch
 import pickle
 
-add_noise = True
+add_noise = False
 """Parameters"""
 dx = 50e-9  # discretization (m)
 dy = 50e-9  # discretization (m)
@@ -29,8 +29,8 @@ plotdir = "plots/" + basedir
 # geom = spintorch.WaveGeometryArray(rho, (nx, ny), (dx, dy, dz), Ms, B0,
 #                                     r0, dr, dm, z_off, rx, ry, Ms_CoPt)
 B1 = 50e-3  # training field multiplier (T)
-geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
-# geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
+# geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
+geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
 src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
 probes = []
 Np = 2  # number of probes
@@ -43,23 +43,24 @@ dev_name = "cuda" if torch.cuda.is_available() else "cpu"
 dev = torch.device(dev_name)  # 'cuda' or 'cpu'
 print("Running on", dev)
 model.load_state_dict(
-    torch.load("C:/spins/Spins/models/focus_Ms/model_e16v7largelr0.001.pt")[
-        "model_state_dict"
-    ]
+    torch.load(
+        "C:/spins/Spins/models/focus_Ms/model_lowest_losssaturationMagnetization6v7.pt"
+    )["model_state_dict"]
 )
 if add_noise:
     with torch.no_grad():
         for name, param in model.named_parameters():
             if name == "geom.rho":
+                print("has rho")
                 spintorch.plot.geometry(model, epoch=-1, plotdir=plotdir)
-                std = 0.02 * torch.abs(param)
+                std = 0.4 * torch.abs(param)
                 noise = torch.normal(mean=0.0, std=std)
                 param.add_(noise)
                 spintorch.plot.geometry(model, epoch=-2, plotdir=plotdir)
             elif name == "Alpha.Rho":
                 print(param)
                 spintorch.plot.damping(model, plotdir=plotdir)
-                std = 0.2 * torch.abs(param)
+                std = 0.4 * torch.abs(param)
                 noise = torch.normal(mean=0.0, std=std)
                 param.add_(noise)
 number = 0
