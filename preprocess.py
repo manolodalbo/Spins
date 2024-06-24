@@ -3,6 +3,9 @@ import scipy.io.wavfile as wav
 import matplotlib.pyplot as plt
 import pickle
 import torch
+import pyaudio
+from playsound import playsound
+import sounddevice as sd
 
 
 def find_frequency():
@@ -12,7 +15,7 @@ def find_frequency():
     # print(signal)
     print(sample_rate)
     sample_rate = sample_rate * 3e6
-    print(f"dt={1/sample_rate:.2e} s")
+    print(f"dt={1/sample_rate} s")
     signal = signal[2500:8000]
     signal = signal / np.max(np.abs(signal))
     frequency_spectrum = np.fft.fft(signal)
@@ -37,11 +40,72 @@ def find_frequency():
     print(peak_frequency)
 
 
-def extract_signal(filename: str):
+def play_sound(signal, sample_rate):
+    p = pyaudio.PyAudio()
+    stream = p.open(format=pyaudio.paInt16, channels=1, rate=sample_rate, output=True)
+    stream.write(signal.astype(np.int16).tobytes())
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+
+def get_signal(filename: str):
     sample_rate, signal = wav.read(filename)
-    print(signal.shape)
-    signal = signal[2500:8000]
+    playsound(filename)
+    plt.plot(signal)
+    plt.show()
+    play_sound(signal[2000:8000], sample_rate)
+    c = "y"
+    f = "y"
+    while True:
+        try:
+            c = input("Enter start sample index (or 'n' to stop): ")
+            if c.lower() == "n":
+                break
+            f = input("Enter end sample index (or 'n' to stop): ")
+            if f.lower() == "n":
+                break
+
+            start_idx = int(c)
+            end_idx = int(f)
+            if start_idx < 0 or end_idx > len(signal) or start_idx >= end_idx:
+                print("Invalid indices. Please try again.")
+                continue
+            print(f"start_idx: {start_idx}, end_idx: {end_idx}")
+            # Play the selected portion of the signal
+            try:
+                play_sound(signal[start_idx:end_idx], sample_rate=sample_rate)
+            except Exception as e:
+                print(f"Error playing sound: {e}")
+        except ValueError:
+            print("Invalid input. Please enter numeric values.")
+    if signal.shape[0] < 8000:
+        signal = signal[1000:6000]
+    else:
+        signal = signal[2500:7500]
     signal = signal / np.max(np.abs(signal))  # normalize the waveform
+    return signal
+
+
+def extract_signal(filename: str, train: bool = True):
+    print("extracting signal...")
+    train_ranges = [4000, 3500, 4000, 3500, 3000, 3000, 3000, 3000, 3000]
+    test_ranges = [2000, 2500, 2000, 2500, 2000, 2000, 1000, 1000, 1500]
+    sample_rate, signal = wav.read(filename)
+    if train:
+        start = train_ranges.pop(0)
+        signal = signal[start : start + 2000]
+        plt.plot(signal)
+        plt.title(filename)
+        plt.show()
+        print(signal.shape)
+    else:
+        start = test_ranges.pop(0)
+        signal = signal[start : start + 2000]
+        plt.plot(signal)
+        plt.show()
+    # assert train_ranges == [] and test_ranges == [], "Ranges not exhausted"
+    signal = signal / np.max(np.abs(signal))
     return signal
 
 
@@ -69,8 +133,8 @@ def preprocess():
         "C:/spins/vowels/m06iy.wav",
     ]
     labels = [0, 1, 2, 0, 1, 2, 0, 1, 2]
-    signals = [extract_signal(file) for file in files_to_extract]
-    test_signals = [extract_signal(file) for file in test_files_to_extract]
+    signals = [extract_signal(file, train=True) for file in files_to_extract]
+    test_signals = [extract_signal(file, train=False) for file in test_files_to_extract]
     print(np.array(signals).shape)
     # for t in test_signals:
     #     print(len(t))
@@ -87,5 +151,5 @@ def preprocess():
     print(f'Data has been dumped into {"C:/spins/data"}/data.p!')
 
 
-find_frequency()
 preprocess()
+# find_frequency()
