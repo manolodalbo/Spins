@@ -33,7 +33,7 @@ def focus(args):
 
     # dt = 1 / (1600 * 3e6)  # timestep (s)
     dt = 20e-12  # timestep (s)
-    batch_size = 9
+    batch_size = 32
 
     B1 = 50e-3  # training field multiplier (T)
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
@@ -62,14 +62,14 @@ def focus(args):
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
     model.to(dev)  # sending model to GPU/CPU
-    with open(f"C:\spins\data\data.p", "rb") as data_file:
+    with open(f"C:\spins\data\data_middle.p", "rb") as data_file:
         data_dict = pickle.load(data_file)
     INPUTS = (data_dict["signals"] * Bt).float().unsqueeze(-1).to(dev)
-    OUTPUTS = data_dict["labels"]  # all classes in outputs
+    OUTPUTS = data_dict["train_labels"]  # all classes in outputs
     print(f"Inputs shape: {INPUTS.shape}")
     OUTPUTS = OUTPUTS.to(dev)
     TEST_INPUTS = (data_dict["test_signals"] * Bt).unsqueeze(-1).to(dev)
-    TEST_OUTPUTS = data_dict["labels"].to(dev)  # desired output
+    TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
     """Define optimizer and lossfunction"""
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     epoch_init = -1

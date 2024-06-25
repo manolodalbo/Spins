@@ -6,6 +6,7 @@ import torch
 import pyaudio
 from playsound import playsound
 import sounddevice as sd
+import os.path
 
 
 def find_frequency():
@@ -109,42 +110,46 @@ def extract_signal(filename: str, train: bool = True):
     return signal
 
 
+def extract_middle_signal(filename: str):
+    sample_rate, signal = wav.read(filename)
+    print(signal.shape)
+    signal = signal[len(signal) // 2 - 2000 : len(signal) // 2 + 2000]
+    signal = signal / np.max(np.abs(signal))
+    return signal
+
+
 def preprocess():
-    files_to_extract = [
-        "C:/spins/vowels/m01ei.wav",
-        "C:/spins/vowels/m01ae.wav",
-        "C:/spins/vowels/m01iy.wav",
-        "C:/spins/vowels/m02ei.wav",
-        "C:/spins/vowels/m02ae.wav",
-        "C:/spins/vowels/m02iy.wav",
-        "C:/spins/vowels/m03ei.wav",
-        "C:/spins/vowels/m03ae.wav",
-        "C:/spins/vowels/m03iy.wav",
-    ]
-    test_files_to_extract = [
-        "C:/spins/vowels/m04ei.wav",
-        "C:/spins/vowels/m04ae.wav",
-        "C:/spins/vowels/m04iy.wav",
-        "C:/spins/vowels/m07ei.wav",
-        "C:/spins/vowels/m07ae.wav",
-        "C:/spins/vowels/m07iy.wav",
-        "C:/spins/vowels/m06ei.wav",
-        "C:/spins/vowels/m06ae.wav",
-        "C:/spins/vowels/m06iy.wav",
-    ]
-    labels = [0, 1, 2, 0, 1, 2, 0, 1, 2]
-    signals = [extract_signal(file, train=True) for file in files_to_extract]
-    test_signals = [extract_signal(file, train=False) for file in test_files_to_extract]
+    files_to_extract = []
+    train_labels = []
+    for i in range(1, 26):
+        if os.path.isfile(f"C:/spins/vowels/m{i:02d}ei.wav"):
+            files_to_extract.append(f"C:/spins/vowels/m{i:02d}ei.wav")
+            files_to_extract.append(f"C:/spins/vowels/m{i:02d}ae.wav")
+            files_to_extract.append(f"C:/spins/vowels/m{i:02d}iy.wav")
+            train_labels += [0, 1, 2]
+        else:
+            print(f"File m{i:02d} not found")
+    test_labels = []
+    test_files_to_extract = []
+    for i in range(25, 49):
+        if os.path.isfile(f"C:/spins/vowels/m{i:02d}ei.wav"):
+            test_files_to_extract.append(f"C:/spins/vowels/m{i:02d}ei.wav")
+            test_files_to_extract.append(f"C:/spins/vowels/m{i:02d}ae.wav")
+            test_files_to_extract.append(f"C:/spins/vowels/m{i:02d}iy.wav")
+            test_labels += [0, 1, 2]
+        else:
+            print(f"File m{i:02d}.wav not found")
+    signals = [extract_middle_signal(file) for file in files_to_extract]
+    test_signals = [extract_middle_signal(file) for file in test_files_to_extract]
     print(np.array(signals).shape)
-    # for t in test_signals:
-    #     print(len(t))
     print(np.array(test_signals).shape)
-    with open(f"C:\spins\data\data.p", "wb") as data_file:
+    with open(f"C:\spins\data\data_middle.p", "wb") as data_file:
         pickle.dump(
             {
                 "signals": torch.tensor(np.array(signals), dtype=torch.long),
                 "test_signals": torch.tensor(np.array(test_signals), dtype=torch.long),
-                "labels": torch.tensor(labels, dtype=torch.long),
+                "train_labels": torch.tensor(train_labels, dtype=torch.long),
+                "test_labels": torch.tensor(test_labels, dtype=torch.long),
             },
             data_file,
         )
