@@ -35,7 +35,7 @@ def objective(trial):
     film = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
     Bt = trial.suggest_float("Bt", 0.005, 0.1)  # excitation field amplitude (T)
     learning_rate = trial.suggest_float("learning_rate", 0.0001, 0.5)
-    epochs = 200
+    epochs = 35
     """Directories"""
     basedir = "focus_Ms/"
     plotdir = "plots/" + basedir
@@ -49,9 +49,10 @@ def objective(trial):
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
     model.to(dev)  # sending model to GPU/CPU
-    middle_size = trial.suggest_int("middle_size", 50, 3000)
+    middle_size = trial.suggest_int("middle_size", 50, 1000)
     data_dict = tunable_preprocess.preprocess(middle_size)
     INPUTS = (data_dict["signals"] * Bt).float().unsqueeze(-1).to(dev)
+    print(INPUTS)
     OUTPUTS = data_dict["train_labels"]  # all classes in outputs
     print(f"Inputs shape: {INPUTS.shape}")
     OUTPUTS = OUTPUTS.to(dev)
@@ -68,10 +69,7 @@ def objective(trial):
     model.retain_history = False
 
     def loss_func(output, target_index):
-        print(output)
-        print(target_index)
         output = output / output.sum(dim=-1).unsqueeze(-1)
-        print(f"output: {output.shape}, target: {target_index.shape}")
         return torch.nn.functional.cross_entropy(output, target_index)
 
     for epoch in range(0, epochs):
@@ -82,7 +80,13 @@ def objective(trial):
         epoch_accuracy = 0
         for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
             b0 = b1 - batch_size
-            u = model(INPUTS[b0:b1])
+            try:
+                u = model(INPUTS[b0:b1])
+            except Exception as e:
+                trial.report(0, epoch)
+                if trial.should_prune():
+                    raise optuna.exceptions.TrialPruned()
+                return 0
             loss = loss_func(u, OUTPUTS[b0:b1])
             epoch_loss += loss.item()
             accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
@@ -98,8 +102,13 @@ def objective(trial):
             for i in range(num_batches):
                 test_batch_inputs = TEST_INPUTS[i * batch_size : (i + 1) * batch_size]
                 test_batch_outputs = TEST_OUTPUTS[i * batch_size : (i + 1) * batch_size]
-
-                test_outputs = model(test_batch_inputs)
+                try:
+                    test_outputs = model(test_batch_inputs)
+                except Exception as e:
+                    trial.report(0, epoch)
+                    if trial.should_prune():
+                        raise optuna.exceptions.TrialPruned()
+                    return 0
                 batch_accuracy = (
                     (test_outputs.argmax(dim=-1) == test_batch_outputs)
                     .float()
@@ -125,7 +134,7 @@ def objective(trial):
 
 if __name__ == "__main__":
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=100)
+    study.optimize(objective, n_trials=50)
     pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
     complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 

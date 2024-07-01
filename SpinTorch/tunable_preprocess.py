@@ -64,9 +64,12 @@ def preprocess(middle_size=2000):
         extract_middle_signal(file, middle_size) for file in test_files_to_extract
     ]
     data_dict = {
-        "signals": torch.tensor(np.array(signals), dtype=torch.long),
-        "test_signals": torch.tensor(np.array(test_signals), dtype=torch.long),
+        "signals": torch.tensor(np.array(signals), dtype=torch.float32),
+        "test_signals": torch.tensor(np.array(test_signals), dtype=torch.float32),
         "train_labels": torch.tensor(train_labels, dtype=torch.long),
         "test_labels": torch.tensor(test_labels, dtype=torch.long),
     }
     return data_dict
+
+
+preprocess(middle_size=494)

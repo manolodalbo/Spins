@@ -4,10 +4,14 @@ import torch
 import os
 import spintorch
 from spintorch.utils import tic, toc, stat_cuda
-import pickle
-from tqdm import tqdm
 import argparse
 from spintorch.multi_modal import MModel
+import tunable_preprocess
+import matplotlib
+
+matplotlib.use("TkAgg")
+import matplotlib.pyplot as plt
+import pickle
 
 
 def parseArgs():
@@ -32,12 +36,12 @@ def focus(args):
     B0 = 60e-3  # bias field (T)
 
     # dt = 1 / (1600 * 3e6)  # timestep (s)
-    dt = 20e-12  # timestep (s)
-    batch_size = 32
+    dt = 2e-11  # timestep (s)
+    batch_size = 9
 
     B1 = 50e-3  # training field multiplier (T)
-    geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
-    # geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
+    # geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
+    geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
     Np = 3  # number of probes
@@ -62,9 +66,10 @@ def focus(args):
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
     model.to(dev)  # sending model to GPU/CPU
-    with open(f"C:\spins\data\data_middle.p", "rb") as data_file:
+    # data_dict = tunable_preprocess.preprocess(300)
+    with open(f"C:\spins\data\data.p", "rb") as data_file:
         data_dict = pickle.load(data_file)
-    INPUTS = (data_dict["signals"] * Bt).float().unsqueeze(-1).to(dev)
+    INPUTS = (data_dict["signals"] * Bt).unsqueeze(-1).to(dev)
     OUTPUTS = data_dict["train_labels"]  # all classes in outputs
     print(f"Inputs shape: {INPUTS.shape}")
     OUTPUTS = OUTPUTS.to(dev)
@@ -88,62 +93,61 @@ def focus(args):
         print(f"output: {output.shape}, target: {target_index.shape}")
         return torch.nn.functional.cross_entropy(output, target_index)
 
+    def their_loss(output, target_index):
+        target_value = output[torch.arange(output.size(0)), target_index]
+        loss = output.sum(dim=1) / target_value - 1
+        losses = loss.log10()
+        return losses.sum()
+
     for epoch in range(epoch_init + 1, epochs):
-        with tqdm(
-            total=INPUTS.shape[0] // batch_size, desc=f"Epoch {epoch + 1}/{epochs}"
-        ) as pbar:
-            indices = torch.randperm(INPUTS.shape[0], device=dev)
-            INPUTS = INPUTS[indices]
-            OUTPUTS = OUTPUTS[indices]
-            epoch_loss = 0
-            epoch_accuracy = 0
-            for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
-                b0 = b1 - batch_size
-                u = model(INPUTS[b0:b1])
-                loss = loss_func(u, OUTPUTS[b0:b1])
-                epoch_loss += loss.item()
-                accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
-                epoch_accuracy += accuracy
-                if accuracy > high_accuracy:
-                    torch.save(
-                        {
-                            "epoch": epoch,
-                            "loss_iter": loss_iter,
-                            "model_state_dict": model.state_dict(),
-                        },
-                        savedir + "model_highest_accuracy" + args.plot_name + ".pt",
-                    )
-                    high_accuracy = accuracy
-                if loss.item() < max_loss:
-                    torch.save(
-                        {
-                            "epoch": epoch,
-                            "loss_iter": loss_iter,
-                            "model_state_dict": model.state_dict(),
-                        },
-                        savedir + "model_lowest_loss" + args.plot_name + ".pt",
-                    )
-                    max_loss = loss.item()
-                stat_cuda("after forward")
-                loss.backward()
-                optimizer.step()
-                stat_cuda("after backward")
-                loss_iter.append(loss.item())  # store loss values
-                pbar.set_description(
-                    f"Batch {b + 1}/{INPUTS.shape[0]//batch_size}, Loss: {loss.item():.6f}, Accuracy: {accuracy.item():.6f}"
+        epoch_loss = 0
+        epoch_accuracy = 0
+        for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
+            optimizer.zero_grad()
+            b0 = b1 - batch_size
+            u = model(INPUTS[b0:b1])
+            print(u)
+            loss = their_loss(u, OUTPUTS[b0:b1])
+            print(f"Loss: {loss.item()}")
+            epoch_loss += loss.item()
+            accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
+            epoch_accuracy += accuracy
+            if accuracy > high_accuracy:
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "loss_iter": loss_iter,
+                        "model_state_dict": model.state_dict(),
+                    },
+                    savedir + "model_highest_accuracy" + args.plot_name + ".pt",
                 )
-                pbar.update(1)
-                try:
-                    spintorch.plot.plot_loss(loss_iter, plotdir, args.plot_name)
-                except:
-                    print("Plotting loss failed")
-            pbar.set_postfix_str(
-                f"Epoch Loss: {epoch_loss:.6f}, Epoch Accuracy: {epoch_accuracy / (b + 1):.6f}"
-            )
+                high_accuracy = accuracy
+            if loss.item() < max_loss:
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "loss_iter": loss_iter,
+                        "model_state_dict": model.state_dict(),
+                    },
+                    savedir + "model_lowest_loss" + args.plot_name + ".pt",
+                )
+                max_loss = loss.item()
+            stat_cuda("after forward")
+            loss.backward()
+            optimizer.step()
+            stat_cuda("after backward")
+            loss_iter.append(loss.item())  # store loss values
             print(
-                "Epoch finished: %d -- Loss: %.6f -- Accuracy: %f"
-                % (epoch, epoch_loss, epoch_accuracy / (b + 1))
+                f"Batch {b + 1}/{INPUTS.shape[0]//batch_size}, Loss: {loss.item():.6f}, Accuracy: {accuracy.item():.6f}"
             )
+            try:
+                spintorch.plot.plot_loss(loss_iter, plotdir, args.plot_name)
+            except:
+                print("Plotting loss failed")
+        print(
+            "Epoch finished: %d -- Loss: %.6f -- Accuracy: %f"
+            % (epoch, epoch_loss, epoch_accuracy / (b + 1))
+        )
         try:
             with torch.no_grad():
                 total_positives = 0

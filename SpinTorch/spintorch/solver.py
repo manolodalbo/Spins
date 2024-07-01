@@ -147,7 +147,7 @@ class MMSolver(nn.Module):
         m_x_Beff = cross(m, self.B_eff(m, B_ext, Msat), 1)
         if m_x_Beff.isnan().any():
             print("nan in m_x_Beff")
-            exit()
+            raise ValueError
         return -(
             1
             / (1 + self.Alpha(relax) ** 2)
