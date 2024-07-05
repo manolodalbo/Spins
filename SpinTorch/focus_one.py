@@ -6,8 +6,8 @@ import spintorch
 from spintorch.utils import tic, toc, stat_cuda
 import argparse
 from spintorch.multi_modal import MModel
-import tunable_preprocess
 import matplotlib
+import tunable_preprocess
 
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
@@ -20,7 +20,10 @@ def parseArgs():
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--plot_name", type=str, default="")
     parser.add_argument("--Bt", type=float, default=1e-3)
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except Exception as e:
+        print(e)
     return args
 
 
@@ -36,12 +39,12 @@ def focus(args):
     B0 = 60e-3  # bias field (T)
 
     # dt = 1 / (1600 * 3e6)  # timestep (s)
-    dt = 2e-11  # timestep (s)
-    batch_size = 9
+    dt = 2.175e-11  # timestep (s)
+    batch_size = 32
 
     B1 = 50e-3  # training field multiplier (T)
-    # geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
-    geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
+    geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
+    # geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
     Np = 3  # number of probes
@@ -66,9 +69,9 @@ def focus(args):
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
     model.to(dev)  # sending model to GPU/CPU
-    # data_dict = tunable_preprocess.preprocess(300)
-    with open(f"C:\spins\data\data.p", "rb") as data_file:
-        data_dict = pickle.load(data_file)
+    data_dict = tunable_preprocess.preprocess(300)
+    # with open(f"C:\spins\data\data.p", "rb") as data_file:
+    #     data_dict = pickle.load(data_file)
     INPUTS = (data_dict["signals"] * Bt).unsqueeze(-1).to(dev)
     OUTPUTS = data_dict["train_labels"]  # all classes in outputs
     print(f"Inputs shape: {INPUTS.shape}")
@@ -88,9 +91,7 @@ def focus(args):
 
     def loss_func(output, target_index):
         print(output)
-        print(target_index)
         output = output / output.sum(dim=-1).unsqueeze(-1)
-        print(f"output: {output.shape}, target: {target_index.shape}")
         return torch.nn.functional.cross_entropy(output, target_index)
 
     def their_loss(output, target_index):
@@ -102,12 +103,15 @@ def focus(args):
     for epoch in range(epoch_init + 1, epochs):
         epoch_loss = 0
         epoch_accuracy = 0
+        indices = torch.randperm(INPUTS.shape[0], device=dev)
+        INPUTS = INPUTS[indices]
+        OUTPUTS = OUTPUTS[indices]
         for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
             optimizer.zero_grad()
             b0 = b1 - batch_size
             u = model(INPUTS[b0:b1])
             print(u)
-            loss = their_loss(u, OUTPUTS[b0:b1])
+            loss = loss_func(u, OUTPUTS[b0:b1])
             print(f"Loss: {loss.item()}")
             epoch_loss += loss.item()
             accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()

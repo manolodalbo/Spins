@@ -20,7 +20,7 @@ def objective(trial):
     Ms = 140e3  # saturation magnetization (A/m)
     B0 = 60e-3  # bias field (T)
     # dt = 1 / (1600 * 3e6)  # timestep (s)
-    dt = trial.suggest_float("dt", 2e-12, 30e-12)
+    dt = trial.suggest_float("dt", 13e-12, 22e-12)
     batch_size = trial.suggest_int("batch_size", 16, 64)
     B1 = 50e-3  # training field multiplier (T)
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
@@ -52,7 +52,6 @@ def objective(trial):
     middle_size = trial.suggest_int("middle_size", 50, 1000)
     data_dict = tunable_preprocess.preprocess(middle_size)
     INPUTS = (data_dict["signals"] * Bt).float().unsqueeze(-1).to(dev)
-    print(INPUTS)
     OUTPUTS = data_dict["train_labels"]  # all classes in outputs
     print(f"Inputs shape: {INPUTS.shape}")
     OUTPUTS = OUTPUTS.to(dev)
@@ -67,11 +66,25 @@ def objective(trial):
     print(INPUTS.shape)
     tic()
     model.retain_history = False
+    print("initializing losses")
 
-    def loss_func(output, target_index):
+    def new_loss(output, target_index):
         output = output / output.sum(dim=-1).unsqueeze(-1)
         return torch.nn.functional.cross_entropy(output, target_index)
 
+    def their_loss(output, target_index):
+        target_value = output[torch.arange(output.size(0)), target_index]
+        loss = output.sum(dim=1) / target_value - 1
+        losses = loss.log10()
+        return losses.sum()
+
+    print("starting training")
+    loss_func_name = trial.suggest_categorical("loss", ["new_loss", "their_loss"])
+    if loss_func_name == "new_loss":
+        loss_func = new_loss
+    else:
+        loss_func = their_loss
+    print("starting epoch")
     for epoch in range(0, epochs):
         indices = torch.randperm(INPUTS.shape[0], device=dev)
         INPUTS = INPUTS[indices]
@@ -79,20 +92,25 @@ def objective(trial):
         epoch_loss = 0
         epoch_accuracy = 0
         for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
+            print("starting batch")
+            optimizer.zero_grad()
             b0 = b1 - batch_size
             try:
                 u = model(INPUTS[b0:b1])
+                print("got output")
             except Exception as e:
                 trial.report(0, epoch)
                 if trial.should_prune():
                     raise optuna.exceptions.TrialPruned()
                 return 0
             loss = loss_func(u, OUTPUTS[b0:b1])
+            print(f"Loss: {loss.item()}")
             epoch_loss += loss.item()
             accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
             epoch_accuracy += accuracy
             loss.backward()
             optimizer.step()
+            print("updated params")
         with torch.no_grad():
             total_positives = 0
             total_positive_accurate = 0

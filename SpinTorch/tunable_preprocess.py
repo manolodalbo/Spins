@@ -70,6 +70,3 @@ def preprocess(middle_size=2000):
         "test_labels": torch.tensor(test_labels, dtype=torch.long),
     }
     return data_dict
-
-
-preprocess(middle_size=494)
