@@ -156,6 +156,9 @@ def fm(inputs: np.array, Fi: float, Ff: float, samples_per_point: int) -> np.arr
     Returns:
         np.array: Frequency modulated waveforms for each input image.
     """
+    reversed_tensor = np.flip(inputs, axis=1)
+    inputs = np.concatenate((inputs, reversed_tensor), axis=1)
+    print("Shape of inputs after concatenation: ", inputs.shape)
     points_per_input = samples_per_point
     dt = 20e-12  # timestep (s)
     timesteps = inputs.shape[1] * points_per_input
@@ -199,12 +202,10 @@ def pool(inputs: np.array):
     """
     inputs = tensor(inputs, dtype=torch.float32)
     inputs = inputs.unsqueeze(1)
-    show_image(inputs[0].squeeze().numpy())
     # the output width and heigh is governed by the following equation assuming no padding:
     # w_f = (w_i + filter_width)/stride and the same for heigh
     pooling_layer = torch.nn.AvgPool2d(kernel_size=(2, 2), stride=2, padding=0)
     pooled = pooling_layer(inputs).squeeze()
-    show_image(pooled[0].numpy())
     to_return = pooled.numpy()
 
     return to_return

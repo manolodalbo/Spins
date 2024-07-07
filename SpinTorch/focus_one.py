@@ -67,8 +67,8 @@ def focus(args):
     with open(f"C:\spins\data\data.p", "rb") as data_file:
         data_dict = pickle.load(data_file)
     INPUTS = torch.tensor(data_dict["train_inputs"] * Bt).unsqueeze(-1).to(dev)
+    # INPUTS = torch.cat((INPUTS, reversed_tensor), dim=1).to(dev)
     OUTPUTS = data_dict["train_labels"]  # all classes in outputs
-    print(OUTPUTS)
     OUTPUTS = OUTPUTS.to(dev)
     TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
     TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
@@ -77,7 +77,6 @@ def focus(args):
     epoch_init = -1
     loss_iter = []
     """Train the network"""
-    print(INPUTS.shape)
     tic()
     model.retain_history = False
     high_accuracy = 0
@@ -86,10 +85,12 @@ def focus(args):
     def bce(output, target_index):
         target_index = target_index.long()
         ohe = torch.nn.functional.one_hot(target_index, 2).float()
+        print(output)
         preds = output / (output.sum(dim=-1).unsqueeze(-1))
         loss = torch.nn.functional.binary_cross_entropy(preds, ohe)
         return loss
 
+    print(INPUTS.shape)
     for epoch in range(epoch_init + 1, epochs):
         with tqdm(
             total=INPUTS.shape[0] // batch_size, desc=f"Epoch {epoch + 1}/{epochs}"
