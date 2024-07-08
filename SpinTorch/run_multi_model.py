@@ -14,7 +14,7 @@ def parseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=400)
     parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--plot_name", type=str, default="")
     parser.add_argument("--Bt", type=float, default=1e-3)
     parser.add_argument("--train", type=bool, default=False)
@@ -22,20 +22,7 @@ def parseArgs():
     return args
 
 
-def create_solver(args, i):
-    """Parameters"""
-    int_to_str = {
-        0: "zero",
-        1: "one",
-        2: "two",
-        3: "three",
-        4: "four",
-        5: "five",
-        6: "six",
-        7: "seven",
-        8: "eight",
-        9: "nine",
-    }
+def create_solver(args, outputs):
     dx = 50e-9  # discretization (m)
     dy = 50e-9  # discretization (m)
     dz = 20e-9  # discretization (m)
@@ -52,18 +39,12 @@ def create_solver(args, i):
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
-    Np = 2  # number of probes
+    Np = outputs  # number of probes
     for p in range(Np):
         probes.append(
             spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
         )
     film = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
-    print(i)
-    film.load_state_dict(
-        torch.load(
-            f"C:/spins/Spins/models/focus_Ms/model_lowest_loss{int_to_str[i]}.pt"
-        )["model_state_dict"]
-    )
     return film
 
 
@@ -80,12 +61,9 @@ def focus(args):
     savedir = "models/" + basedir
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
-    films = []
-    to_include = [2, 3, 4, 6, 7, 9]
-    for i in range(10):
-        if i in to_include:
-            films.append(create_solver(args, i))
-    model = MModel(films=films)
+    integrating_film = create_solver(args, 2)
+    cat_film = create_solver(args, 2)
+    model = MModel(integrating_film, cat_film)
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
@@ -105,6 +83,16 @@ def focus(args):
     tic()
     model.retain_history = False
     high_accuracy = 0
+
+    def bce(output, target_index):
+        target_index = target_index.long()
+        ohe = torch.nn.functional.one_hot(target_index, 2).float()
+        print(output)
+        preds = output / (output.sum(dim=-1).unsqueeze(-1))
+        loss = torch.nn.functional.binary_cross_entropy(preds, ohe)
+        return loss
+
+    print(OUTPUTS)
     if args.train:
         for epoch in range(epoch_init + 1, epochs):
             with tqdm(
@@ -118,16 +106,13 @@ def focus(args):
                 for b, b1 in enumerate(
                     range(batch_size, INPUTS.shape[0] + 1, batch_size)
                 ):
+                    optimizer.zero_grad()
                     b0 = b1 - batch_size
                     u = model(INPUTS[b0:b1])
-                    loss = torch.nn.functional.cross_entropy(u, OUTPUTS[b0:b1])
+                    print(f"output shape: {u.shape}")
+                    loss = bce(u, OUTPUTS[b0:b1])
                     epoch_loss += loss.item()
-                    topk = 3
-                    topk_values, topk_indices = torch.topk(u, topk, dim=1)
-                    correct = topk_indices.eq(
-                        OUTPUTS[b0:b1].view(-1, 1).expand_as(topk_indices)
-                    )
-                    accuracy = correct.any(dim=1).float().mean().item()
+                    accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
                     epoch_accuracy += accuracy
                     if accuracy > high_accuracy:
                         torch.save(
@@ -138,6 +123,7 @@ def focus(args):
                             },
                             savedir + "model_highest_accuracy" + args.plot_name + ".pt",
                         )
+                        high_accuracy = accuracy
                     stat_cuda("after forward")
                     loss.backward()
                     optimizer.step()
@@ -207,16 +193,9 @@ def focus(args):
                         batch_start = i * batch_size
                         batch_end = (i + 1) * batch_size
                         test_outputs = model(TEST_INPUTS[batch_start:batch_end])
-                        topk = 3
-                        topk_values, topk_indices = torch.topk(
-                            test_outputs, topk, dim=1
+                        test_accuracy = (
+                            (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
                         )
-                        correct = topk_indices.eq(
-                            TEST_OUTPUTS[batch_start:batch_end]
-                            .view(-1, 1)
-                            .expand_as(topk_indices)
-                        )
-                        test_accuracy = correct.any(dim=1).float().mean().item()
 
                         total_test_accuracy += test_accuracy
                         average_test_accuracy = total_test_accuracy / (i + 1)

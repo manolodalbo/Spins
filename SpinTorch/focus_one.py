@@ -103,6 +103,7 @@ def focus(args):
             for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
                 b0 = b1 - batch_size
                 u = model(INPUTS[b0:b1])
+                print(u.shape)
                 loss = bce(u, OUTPUTS[b0:b1])
                 epoch_loss += loss.item()
                 accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
