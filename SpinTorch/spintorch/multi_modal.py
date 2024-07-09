@@ -17,22 +17,18 @@ class MModel(nn.Module):
             ifilm_output == 0, torch.tensor(small_value), ifilm_output
         )
         cfilm_output = cfilm(x)
-        # # print("ifilm_output:")
-        # # print(ifilm_output)
-        # # print("cfilm_output:")
-        # # print(cfilm_output)
-        # plt.figure(figsize=(10, 6))
-        # plt.plot(ifilm_output[0][0].cpu().detach().numpy(), label="first probe")
-        # plt.plot(ifilm_output[0][1].cpu().detach().numpy(), label="second probe")
+        plt.figure(figsize=(10, 6))
+        plt.plot(ifilm_output[0][0].cpu().detach().numpy(), label="first probe")
+        plt.plot(ifilm_output[0][1].cpu().detach().numpy(), label="second probe")
 
-        # # Adding titles and labels
-        # plt.title("Tensors Plot")
-        # plt.xlabel("Time")
-        # plt.ylabel("Output")
-        # plt.legend()
+        # Adding titles and labels
+        plt.title("Tensors Plot")
+        plt.xlabel("Time")
+        plt.ylabel("Output")
+        plt.legend()
 
         # # Show plot
-        # plt.savefig("C:/spins/Spins/plots/tensors_plot.png")
+        plt.savefig("C:/spins/Spins/plots/tensors_plot_zeros.png")
 
         # plt.figure(figsize=(10, 6))
         # plt.plot(x[0].cpu().detach().numpy(), label="input")

@@ -7,7 +7,7 @@ from spintorch.utils import tic, toc, stat_cuda
 import pickle
 from tqdm import tqdm
 import argparse
-from spintorch.multi_modal import MModel
+from spintorch.integrating_model import IntModel
 
 
 def parseArgs():
@@ -61,21 +61,20 @@ def focus(args):
     savedir = "models/" + basedir
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
-    integrating_film = create_solver(args, 2)
-    cat_film = create_solver(args, 2)
-    model = MModel(integrating_film, cat_film)
+    solver = create_solver(args, 2)
+    with open("C:\spins\data\data.p", "rb") as data_file:
+        data_dict = pickle.load(data_file)
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
-    model.to(dev)  # sending model to GPU/CPU
-    with open("C:\spins\data\data.p", "rb") as data_file:
-        data_dict = pickle.load(data_file)
     INPUTS = torch.tensor(data_dict["train_inputs"] * Bt).unsqueeze(-1)
     INPUTS = torch.cat((INPUTS, torch.zeros(INPUTS.shape[0], 1000, 1)), dim=1).to(dev)
     print(f"inputs shape: {INPUTS.shape}")
     OUTPUTS = data_dict["train_labels"].to(dev)  # desired output
     TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
     TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
+    model = IntModel(solver, INPUTS.shape[1])
+    model.to(dev)  # sending model to GPU/CPU
     """Define optimizer and lossfunction"""
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     epoch_init = -1
