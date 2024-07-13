@@ -7,8 +7,8 @@ import torch.nn.functional as F
 class NonNegativeLinear(nn.Module):
     def __init__(self, in_features, out_features):
         super(NonNegativeLinear, self).__init__()
-        self.weight = nn.Parameter(torch.rand(out_features, in_features))
-        self.bias = nn.Parameter(torch.rand(out_features))
+        self.weight = nn.Parameter(torch.ones(out_features, in_features))
+        self.bias = nn.Parameter(torch.ones(out_features))
 
     def forward(self, x):
         # Apply ReLU to ensure weights and bias are non-negative

@@ -7,7 +7,6 @@ from spintorch.utils import tic, toc, stat_cuda
 import pickle
 from tqdm import tqdm
 import argparse
-from spintorch.multi_modal import MModel
 
 
 def parseArgs():
@@ -66,11 +65,14 @@ def focus(args):
     model.to(dev)  # sending model to GPU/CPU
     with open(f"C:\spins\data\data.p", "rb") as data_file:
         data_dict = pickle.load(data_file)
-    INPUTS = torch.tensor(data_dict["train_inputs"] * Bt).unsqueeze(-1).to(dev)
-    # INPUTS = torch.cat((INPUTS, reversed_tensor), dim=1).to(dev)
+    INPUTS = torch.tensor(data_dict["train_inputs"] * Bt).unsqueeze(-1)
+    INPUTS = torch.cat((INPUTS, torch.zeros(INPUTS.shape[0], 1000, 1)), dim=1).to(dev)
     OUTPUTS = data_dict["train_labels"]  # all classes in outputs
     OUTPUTS = OUTPUTS.to(dev)
-    TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
+    TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1)
+    TEST_INPUTS = torch.cat(
+        (TEST_INPUTS, torch.zeros(TEST_INPUTS.shape[0], 1000, 1)), dim=1
+    ).to(dev)
     TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
     """Define optimizer and lossfunction"""
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -101,9 +103,9 @@ def focus(args):
             epoch_loss = 0
             epoch_accuracy = 0
             for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
+                optimizer.zero_grad()
                 b0 = b1 - batch_size
-                u = model(INPUTS[b0:b1])
-                print(u.shape)
+                u = model(INPUTS[b0:b1]).sum(dim=-1)
                 loss = bce(u, OUTPUTS[b0:b1])
                 epoch_loss += loss.item()
                 accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
@@ -150,6 +152,7 @@ def focus(args):
             )
         try:
             with torch.no_grad():
+                optimizer.zero_grad()
                 total_positives = 0
                 total_positive_accurate = 0
                 total_test_accuracy = 0.0
@@ -163,7 +166,7 @@ def focus(args):
                         i * batch_size : (i + 1) * batch_size
                     ]
 
-                    test_outputs = model(test_batch_inputs)
+                    test_outputs = model(test_batch_inputs).sum(dim=-1)
                     batch_accuracy = (
                         (test_outputs.argmax(dim=-1) == test_batch_outputs)
                         .float()
