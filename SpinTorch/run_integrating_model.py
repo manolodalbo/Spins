@@ -71,7 +71,10 @@ def focus(args):
     INPUTS = torch.cat((INPUTS, torch.zeros(INPUTS.shape[0], 1000, 1)), dim=1).to(dev)
     print(f"inputs shape: {INPUTS.shape}")
     OUTPUTS = data_dict["train_labels"].to(dev)  # desired output
-    TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
+    TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1)
+    TEST_INPUTS = torch.cat(
+        (TEST_INPUTS, torch.zeros(TEST_INPUTS.shape[0], 1000, 1)), dim=1
+    ).to(dev)
     TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
     model = IntModel(solver, INPUTS.shape[1])
     model.to(dev)  # sending model to GPU/CPU
