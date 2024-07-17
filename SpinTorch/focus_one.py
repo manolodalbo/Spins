@@ -40,7 +40,7 @@ def focus(args):
     # geom = spintorch.WaveGeometryMs((nx, ny), (dx, dy, dz), Ms, B0)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
-    Np = 2  # number of probes
+    Np = 50  # number of probes
     for p in range(Np):
         probes.append(
             spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
