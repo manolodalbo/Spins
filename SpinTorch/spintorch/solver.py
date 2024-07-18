@@ -55,8 +55,7 @@ class MMSolver(nn.Module):
         outputs = self.run(self.m0, B_ext, Msat, signal) # run the simulation
         self.fwd = False
         concatted = cat(outputs,dim=-1)
-        sum_for_each_probe = concatted.sum(dim=-1)
-        return sum_for_each_probe #returns batch_size X number of probes.
+        return concatted #returns batch_size X number of probesx timesteps.
 
     def run(self, m, B_ext, Msat, signal):
         """Run the simulation in multiple stages for checkpointing"""

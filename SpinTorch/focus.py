@@ -54,24 +54,29 @@ batch_size = 3
 src = spintorch.WaveLineSource(10, 0, 10, ny-1, dim=2)
 probes = []
 epochs = 20
-Np = 3  # number of probes
+Np = 1  # number of probes
 for p in range(Np):
     probes.append(spintorch.WaveIntensityProbeDisk(nx-15, int(ny*(p+1)/(Np+1)), 2))
 model = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
 
-dev = torch.device('cuda')  # 'cuda' or 'cpu'
+dev = torch.device('cpu')  # 'cuda' or 'cpu'
 print('Running on', dev)
 model.to(dev)   # sending model to GPU/CPU
 
 
 '''Define the source signal and output goal'''
-t = torch.arange(0, timesteps*dt, dt, device=dev).unsqueeze(0).unsqueeze(2) # time vector
-X1 = Bt*torch.sin(2*np.pi*f1*t)  # sinusoid signal at f1 frequency, Bt amplitude
-X2 = Bt*torch.sin(2*np.pi*f2*t)
-X3 = Bt*torch.sin(2*np.pi*f3*t)
+# t = torch.arange(0, timesteps*dt, dt, device=dev).unsqueeze(0).unsqueeze(2) # time vector
+# X1 = Bt*torch.sin(2*np.pi*f1*t)  # sinusoid signal at f1 frequency, Bt amplitude
+# X2 = Bt*torch.sin(2*np.pi*f2*t)
+# X3 = Bt*torch.sin(2*np.pi*f3*t)
+X1 = torch.zeros(1,800,1)
+X2 = torch.zeros(1,800,1)
+X3 = torch.zeros(1,800,1)
+X1[:,0:50,:] = Bt
+print(X1.shape)
 INPUTS = torch.cat((X1,X2,X3),dim=0).to(dev)  # here we could cat multiple inputs
 # INPUTS = Bt*torch.sin(2*np.pi*f1*t) # here we could cat multiple inputs
-OUTPUTS = torch.tensor(np.array([0,1,2]),dtype=torch.long).to(dev) # desired output
+OUTPUTS = torch.tensor(np.array([0,0,0]),dtype=torch.long).to(dev) # desired output
 
 '''Define optimizer and lossfunction'''
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -96,8 +101,13 @@ model.retain_history = True
 for epoch in range(epoch_init+1, epochs):
     optimizer.zero_grad()
     u = model(INPUTS)
-    print("output: ")
-    print(u)
+    plt.figure(figsize=(10,6))
+    plt.plot(u[0][0].detach().numpy(),label="output")
+    plt.xlabel("time")
+    plt.ylabel("output")
+    plt.legend()
+    plt.savefig("C:/spin/plots/output_first800.png")
+    plt.close()
     loss = my_loss(u,OUTPUTS)
     loss_iter.append(loss.item())  # store loss values
     spintorch.plot.plot_loss(loss_iter, plotdir)
