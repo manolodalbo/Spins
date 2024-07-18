@@ -71,8 +71,8 @@ class MMSolver(nn.Module):
         """Run the simulation in multiple stages for checkpointing"""
         # this essentially loops through the
         outputs = []
-        N = int(np.sqrt(signal.size()[1]))  # number of stages
-        chunked = signal.chunk(N, dim=1)
+        N = int(np.sqrt(signal.size()[2]))  # number of stages
+        chunked = signal.chunk(N, dim=2)
         # this splits up the signal into smaller chunks. Effectively dividing into N different groups
         # corresponding to the time steps
 
@@ -87,8 +87,7 @@ class MMSolver(nn.Module):
         """Run a subset of timesteps (needed for 2nd level checkpointing)"""
         outputs = empty(0, device=self.dt.device)
         # Loop through the signal
-        for sig in signal.split(1, dim=1):
-
+        for sig in signal.split(1, dim=2):
             B_ext = self.inject_sources(B_ext, sig)
             # Propagate the fields (with checkpointing to save memory)
             m = checkpoint(self.rk4_step_LLG, m, B_ext, Msat, use_reentrant=False)
@@ -105,9 +104,8 @@ class MMSolver(nn.Module):
         Called in run_stage for every loop through the signal
         """
         for i, src in enumerate(self.sources):
-            print(sig.shape)
             B_ext = src(
-                B_ext, sig[:, 0, i]
+                B_ext, sig[:, :, 0, i]
             )  # changed this to be compattible with different batch sizes.
         return B_ext
 

@@ -12,11 +12,11 @@ from spintorch.multi_modal import MModel
 
 def parseArgs():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=400)
+    parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--plot_name", type=str, default="")
-    parser.add_argument("--Bt", type=float, default=1e-3)
+    parser.add_argument("--Bt", type=float, default=1e-2)
     args = parser.parse_args()
     return args
 
@@ -39,7 +39,7 @@ def create_solver(args):
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
-    Np = 2  # number of probes
+    Np = 10  # number of probes
     for p in range(Np):
         probes.append(
             spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
@@ -62,23 +62,41 @@ def focus(args):
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
     films = []
-    for i in range(10):
+    for i in range(2):
         films.append(create_solver(args))
-    model = MModel(films=films)
+    model = MModel(films[0], films[1])
+
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
     model.to(dev)  # sending model to GPU/CPU
+
     with open("C:\spins\data\data.p", "rb") as data_file:
         data_dict = pickle.load(data_file)
-    INPUTS = torch.tensor(data_dict["train_inputs"] * Bt).unsqueeze(-1).to(dev)
+    INPUTS = (data_dict["train_inputs"] * Bt).to(dev)
     OUTPUTS = data_dict["train_labels"].to(dev)  # desired output
-    TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
+    TEST_INPUTS = (data_dict["test_inputs"] * Bt).to(dev)
     TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
+
     """Define optimizer and lossfunction"""
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     epoch_init = -1
     loss_iter = []
+
+    def bce(output, target_index):
+        target_index = target_index.long()
+        ohe = torch.nn.functional.one_hot(target_index, 2).float()
+        preds = output / (output.sum(dim=-1).unsqueeze(-1))
+        loss = torch.nn.functional.binary_cross_entropy(preds, ohe)
+        return loss
+
+    def cross_entropy(outputs, target_index):
+        # target_index = target_index.long()
+        # ohe = torch.nn.functional.one_hot(target_index, 2).float()
+        preds = outputs / (outputs.sum(dim=-1).unsqueeze(-1))
+        loss = torch.nn.functional.cross_entropy(preds, target_index)
+        return loss
+
     """Train the network"""
     print(INPUTS.shape)
     tic()
@@ -94,9 +112,11 @@ def focus(args):
             epoch_loss = 0
             epoch_accuracy = 0
             for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
+                optimizer.zero_grad()
                 b0 = b1 - batch_size
                 u = model(INPUTS[b0:b1])
-                loss = torch.nn.functional.cross_entropy(u, OUTPUTS[b0:b1])
+                print(f"output shape: {u.shape}")
+                loss = cross_entropy(u, OUTPUTS[b0:b1])
                 epoch_loss += loss.item()
                 accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
                 epoch_accuracy += accuracy

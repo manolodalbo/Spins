@@ -15,7 +15,6 @@ def parseArgs() -> argparse.Namespace:
     parser.add_argument("--min_freq", type=float, default=0.5e9)
     parser.add_argument("--max_freq", type=float, default=10e9)
     parser.add_argument("--size", type=int, default=320)
-    parser.add_argument("--all_classes", type=bool, default=False)
     parser.add_argument("--num", type=int, default=0)
     args = parser.parse_args()
     return args
@@ -44,7 +43,7 @@ def load_and_preprocess_data(args: argparse.Namespace):
         tf.keras.datasets.mnist.load_data()
     )
     keep_classes = [6, 7]
-    label_mapping = {6: 0, 7: 1}
+    label_mapping = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9}
     test_inputs, test_labels = filter_classes(test_inputs, test_labels, keep_classes)
     train_inputs, train_labels = filter_classes(
         train_inputs, train_labels, keep_classes
@@ -55,51 +54,34 @@ def load_and_preprocess_data(args: argparse.Namespace):
     test_inputs = pool(test_inputs)
     dig_train_inputs = (
         train_inputs.reshape(-1, train_inputs.shape[-1] * train_inputs.shape[-2]) / 255
-    )
+    )[0 : args.size]
     dig_test_inputs = (
         test_inputs.reshape(-1, test_inputs.shape[-1] * test_inputs.shape[-2]) / 255
     )
-    refined_inputs = dig_train_inputs[0 : args.size]
-    refined_inputs = wave_transform(refined_inputs, args.min_freq, args.max_freq)
+    refined_inputs = wave_transform(dig_train_inputs, args.min_freq, args.max_freq)
     refined_inputs = add_zeros(refined_inputs, 500)
     refined_ouputs = remap_labels(train_labels[0 : args.size], label_mapping)
     testing_size = int(0.2 * args.size) if int(0.2 * args.size) >= 320 else 320
-    new_test_inputs = wave_transform(
-        dig_test_inputs[0:testing_size], args.min_freq, args.max_freq
-    )
+    dig_test_inputs = dig_test_inputs[0:testing_size]
+    new_test_inputs = wave_transform(dig_test_inputs, args.min_freq, args.max_freq)
     new_test_inputs = add_zeros(new_test_inputs, 500)
     print(f"Refined inputs shape: {refined_inputs.shape}")
     new_test_labels = remap_labels(test_labels[0:testing_size], label_mapping)
     train_labels = tensor(refined_ouputs, dtype=torch.long)
     test_labels = tensor(new_test_labels, dtype=torch.long)
-    if args.all_classes == False:
-        with open(f"C:/spins/data/data_{args.num}.p", "wb") as pickle_file:
-            pickle.dump(
-                dict(
-                    train_inputs=train_inputs,
-                    train_labels=train_labels,
-                    test_inputs=test_inputs,
-                    test_labels=test_labels,
-                    dig_train_inputs=refined_inputs,
-                    dig_test_inputs=new_test_inputs,
-                ),
-                pickle_file,
-            )
-        print(f'Data has been dumped into {"C:/spins/data"}/data_{args.num}.p!')
-    else:
-        with open(f"C:/spins/data/data.p", "wb") as pickle_file:
-            pickle.dump(
-                dict(
-                    train_inputs=train_inputs,
-                    train_labels=train_labels,
-                    test_inputs=test_inputs,
-                    test_labels=test_labels,
-                    dig_train_inputs=refined_inputs,
-                    dig_test_inputs=new_test_inputs,
-                ),
-                pickle_file,
-            )
-        print(f'Data has been dumped into {"C:/spins/data"}/data.p!')
+    with open(f"C:/spins/data/data.p", "wb") as pickle_file:
+        pickle.dump(
+            dict(
+                train_inputs=refined_inputs,
+                train_labels=train_labels,
+                test_inputs=new_test_inputs,
+                test_labels=test_labels,
+                dig_train_inputs=dig_train_inputs,
+                dig_test_inputs=dig_test_inputs,
+            ),
+            pickle_file,
+        )
+    print(f'Data has been dumped into {"C:/spins/data"}/data.p!')
 
 
 def pool(inputs: np.array):
@@ -128,7 +110,7 @@ def add_zeros(wave: tensor, number_of_zeros):
     added_zeros = torch.cat(
         (wave, torch.zeros((wave.shape[0], wave.shape[1], number_of_zeros))), dim=-1
     )
-    return added_zeros
+    return added_zeros.unsqueeze(-1)
 
 
 def show_image(image: np.array):
