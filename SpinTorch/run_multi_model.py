@@ -1,0 +1,235 @@
+"""Optimize a focusing model"""
+
+import torch
+import os
+import spintorch
+from spintorch.utils import tic, toc, stat_cuda
+import pickle
+from tqdm import tqdm
+import argparse
+from spintorch.multi_modal import MModel
+
+
+def parseArgs():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--epochs", type=int, default=400)
+    parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--plot_name", type=str, default="")
+    parser.add_argument("--Bt", type=float, default=1e-3)
+    parser.add_argument("--train", type=bool, default=False)
+    args = parser.parse_args()
+    return args
+
+
+def create_solver(args, i):
+    """Parameters"""
+    int_to_str = {
+        0: "zero",
+        1: "one",
+        2: "two",
+        3: "three",
+        4: "four",
+        5: "five",
+        6: "six",
+        7: "seven",
+        8: "eight",
+        9: "nine",
+    }
+    dx = 50e-9  # discretization (m)
+    dy = 50e-9  # discretization (m)
+    dz = 20e-9  # discretization (m)
+    nx = 100  # size x    (cells)
+    ny = 100  # size y    (cells)
+
+    Ms = 140e3  # saturation magnetization (A/m)
+    B0 = 60e-3  # bias field (T)
+
+    dt = 20e-12  # timestep (s)
+    batch_size = args.batch_size
+
+    B1 = 50e-3  # training field multiplier (T)
+    geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
+    src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
+    probes = []
+    Np = 2  # number of probes
+    for p in range(Np):
+        probes.append(
+            spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
+        )
+    film = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
+    print(i)
+    film.load_state_dict(
+        torch.load(
+            f"C:/spins/Spins/models/focus_Ms/model_lowest_loss{int_to_str[i]}.pt"
+        )["model_state_dict"]
+    )
+    return film
+
+
+def focus(args):
+    Bt = args.Bt  # excitation field amplitude (T)
+    learning_rate = args.learning_rate
+    epochs = args.epochs
+    batch_size = args.batch_size
+    """Directories"""
+    basedir = "focus_Ms/"
+    plotdir = "plots/" + basedir
+    if not os.path.isdir(plotdir):
+        os.makedirs(plotdir)
+    savedir = "models/" + basedir
+    if not os.path.isdir(savedir):
+        os.makedirs(savedir)
+    films = []
+    to_include = [2, 3, 4, 6, 7, 9]
+    for i in range(10):
+        if i in to_include:
+            films.append(create_solver(args, i))
+    model = MModel(films=films)
+    dev_name = "cuda" if torch.cuda.is_available() else "cpu"
+    dev = torch.device(dev_name)  # 'cuda' or 'cpu'
+    print("Running on", dev)
+    model.to(dev)  # sending model to GPU/CPU
+    with open("C:\spins\data\data.p", "rb") as data_file:
+        data_dict = pickle.load(data_file)
+    INPUTS = torch.tensor(data_dict["train_inputs"] * Bt).unsqueeze(-1).to(dev)
+    OUTPUTS = data_dict["train_labels"].to(dev)  # desired output
+    TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
+    TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
+    """Define optimizer and lossfunction"""
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    epoch_init = -1
+    loss_iter = []
+    """Train the network"""
+    print(INPUTS.shape)
+    tic()
+    model.retain_history = False
+    high_accuracy = 0
+    if args.train:
+        for epoch in range(epoch_init + 1, epochs):
+            with tqdm(
+                total=INPUTS.shape[0] // batch_size, desc=f"Epoch {epoch + 1}/{epochs}"
+            ) as pbar:
+                indices = torch.randperm(INPUTS.shape[0], device=dev)
+                INPUTS = INPUTS[indices]
+                OUTPUTS = OUTPUTS[indices]
+                epoch_loss = 0
+                epoch_accuracy = 0
+                for b, b1 in enumerate(
+                    range(batch_size, INPUTS.shape[0] + 1, batch_size)
+                ):
+                    b0 = b1 - batch_size
+                    u = model(INPUTS[b0:b1])
+                    loss = torch.nn.functional.cross_entropy(u, OUTPUTS[b0:b1])
+                    epoch_loss += loss.item()
+                    topk = 3
+                    topk_values, topk_indices = torch.topk(u, topk, dim=1)
+                    correct = topk_indices.eq(
+                        OUTPUTS[b0:b1].view(-1, 1).expand_as(topk_indices)
+                    )
+                    accuracy = correct.any(dim=1).float().mean().item()
+                    epoch_accuracy += accuracy
+                    if accuracy > high_accuracy:
+                        torch.save(
+                            {
+                                "epoch": epoch,
+                                "loss_iter": loss_iter,
+                                "model_state_dict": model.state_dict(),
+                            },
+                            savedir + "model_highest_accuracy" + args.plot_name + ".pt",
+                        )
+                    stat_cuda("after forward")
+                    loss.backward()
+                    optimizer.step()
+                    stat_cuda("after backward")
+                    loss_iter.append(loss.item())  # store loss values
+                    pbar.set_description(
+                        f"Batch {b + 1}/{INPUTS.shape[0]//batch_size}, Loss: {loss.item():.6f}, Accuracy: {accuracy:.6f}"
+                    )
+                    pbar.update(1)
+                    try:
+                        spintorch.plot.plot_loss(loss_iter, plotdir, args.plot_name)
+                    except:
+                        print("Plotting loss failed")
+                pbar.set_postfix_str(
+                    f"Epoch Loss: {epoch_loss:.6f}, Epoch Accuracy: {epoch_accuracy / (b + 1):.6f}"
+                )
+                print(
+                    "Epoch finished: %d -- Loss: %.6f -- Accuracy: %f"
+                    % (epoch, epoch_loss, epoch_accuracy / (b + 1))
+                )
+                try:
+                    with torch.no_grad():
+                        total_test_accuracy = 0
+                        for i in range(TEST_INPUTS.shape[0] // args.batch_size - 1):
+                            test_outputs = model(
+                                TEST_INPUTS[
+                                    i * args.batch_size : (i + 1) * args.batch_size
+                                ]
+                            )
+                            test_accuracy = (
+                                (
+                                    test_outputs.argmax(dim=-1)
+                                    == TEST_OUTPUTS[
+                                        i * args.batch_size : (i + 1) * args.batch_size
+                                    ]
+                                )
+                                .float()
+                                .mean()
+                            )
+                            total_test_accuracy += test_accuracy
+                        test_accuracy = total_test_accuracy / (i + 1)
+                        print("Test Accuracy: %f" % (test_accuracy))
+                except:
+                    print("Test failed")
+                toc()
+
+                """Save model checkpoint"""
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "loss_iter": loss_iter,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                    },
+                    savedir + "model_e%d" % (epoch) + args.plot_name + ".pt",
+                )
+    else:
+        with tqdm(
+            total=TEST_INPUTS.shape[0] // batch_size, desc="Batch Progress"
+        ) as pbar:
+            try:
+                with torch.no_grad():
+                    total_test_accuracy = 0
+                    num_batches = TEST_INPUTS.shape[0] // batch_size
+
+                    for i in range(num_batches):
+                        batch_start = i * batch_size
+                        batch_end = (i + 1) * batch_size
+                        test_outputs = model(TEST_INPUTS[batch_start:batch_end])
+                        topk = 3
+                        topk_values, topk_indices = torch.topk(
+                            test_outputs, topk, dim=1
+                        )
+                        correct = topk_indices.eq(
+                            TEST_OUTPUTS[batch_start:batch_end]
+                            .view(-1, 1)
+                            .expand_as(topk_indices)
+                        )
+                        test_accuracy = correct.any(dim=1).float().mean().item()
+
+                        total_test_accuracy += test_accuracy
+                        average_test_accuracy = total_test_accuracy / (i + 1)
+
+                        pbar.set_postfix({"Accuracy": average_test_accuracy})
+                        pbar.update(1)
+
+                    # Print final accuracy
+                    print(f"Final Test Accuracy: {average_test_accuracy:.4f}")
+            except Exception as e:
+                print("Test failed")
+                print(f"Exception: {e}")
+
+
+if __name__ == "__main__":
+    focus(parseArgs())
