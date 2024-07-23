@@ -13,7 +13,7 @@ def parseArgs() -> argparse.Namespace:
     parser.add_argument("--points", type=int, default=3)
     parser.add_argument("--pooling", type=bool, default=False)
     parser.add_argument("--min_freq", type=float, default=0.5e9)
-    parser.add_argument("--max_freq", type=float, default=10e9)
+    parser.add_argument("--max_freq", type=float, default=30e9)
     parser.add_argument("--size", type=int, default=320)
     parser.add_argument("--num", type=int, default=0)
     args = parser.parse_args()
@@ -42,7 +42,7 @@ def load_and_preprocess_data(args: argparse.Namespace):
     (train_inputs, train_labels), (test_inputs, test_labels) = (
         tf.keras.datasets.mnist.load_data()
     )
-    keep_classes = [6, 7]
+    keep_classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     label_mapping = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9}
     test_inputs, test_labels = filter_classes(test_inputs, test_labels, keep_classes)
     train_inputs, train_labels = filter_classes(

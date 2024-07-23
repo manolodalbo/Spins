@@ -21,7 +21,7 @@ def parseArgs():
     return args
 
 
-def create_solver(args):
+def create_solver(args, num_probes):
     """Parameters"""
     dx = 50e-9  # discretization (m)
     dy = 50e-9  # discretization (m)
@@ -39,7 +39,7 @@ def create_solver(args):
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
-    Np = 10  # number of probes
+    Np = num_probes  # number of probes
     for p in range(Np):
         probes.append(
             spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
@@ -61,10 +61,9 @@ def focus(args):
     savedir = "models/" + basedir
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
-    films = []
-    for i in range(2):
-        films.append(create_solver(args))
-    model = MModel(films[0], films[1])
+    ifilm = create_solver(args, num_probes=2)
+    cfilm = create_solver(args, num_probes=10)
+    model = MModel(ifilm, cfilm)
 
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'

@@ -11,11 +11,11 @@ class MModel(nn.Module):
     def forward(self, x):
         ifilm = self.films[0]
         cfilm = self.films[1]
-        # ifilm_output = ifilm(x)
-        # small_value = 1e-12
-        # ifilm_output = torch.where(
-        #     ifilm_output == 0, torch.tensor(small_value), ifilm_output
-        # )
+        ifilm_output = ifilm(x)
+        small_value = 1e-12
+        ifilm_output = torch.where(
+            ifilm_output == 0, torch.tensor(small_value), ifilm_output
+        )
         cfilm_output = cfilm(x)
         # plt.figure(figsize=(10, 6))
         # plt.plot(ifilm_output[0][0].cpu().detach().numpy(), label="first probe")
@@ -37,7 +37,7 @@ class MModel(nn.Module):
         # plt.ylabel("Input")
         # plt.legend()
         # plt.savefig("C:/spins/Spins/plots/input_plot.png")
-        # integration = ifilm_output[:, 0, :] / ifilm_output.sum(dim=1)
-        # output = cfilm_output * integration.unsqueeze(1)
+        integration = ifilm_output[:, 0, :] / ifilm_output.sum(dim=1)
+        output = cfilm_output * integration.unsqueeze(1)
         output = cfilm_output
         return output.sum(dim=-1)
