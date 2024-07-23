@@ -13,42 +13,28 @@ class MyTrigram(nn.Module):
         self.vocab_size = vocab_size
         self.batch_size = batch_size
         self.embed_size = embed_size
-        self.Bt = Bt
-        self.film_RNN = RNN_film(self.embed_size, self.batch_size)
+        self.linear_layer = nn.Linear(2 * self.embed_size, self.embed_size)
+        self.activation = nn.LeakyReLU()
+        self.second_layer = nn.Linear(50, self.embed_size)
+        self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax(dim=-1)
         self.embedding_matrix = nn.Parameter(
-            torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01)
+            torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01),
         )
         self.output_matrix = nn.Parameter(
-            torch.normal(torch.ones(self.vocab_size, self.embed_size) * 7.8e6, std=1e5)
+            torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01),
         )
-        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, inputs):
-        inputs = inputs
-        wave_inputs = turn_into_wave(inputs, self.embedding_matrix)
-        full_input = torch.cat(
-            [
-                wave_inputs,
-                torch.zeros(
-                    (wave_inputs.shape[0], wave_inputs.shape[1], 500, 1),
-                    device=wave_inputs.device,
-                ),
-            ],
-            dim=2,
-        )
-        film_output = self.film_RNN(full_input * self.Bt)
-        # it might be worthwhile to crop the output to only once both inputs have gone
-        # it might also make sense to just weight later outputs more strongly. linearly increasing weights?
-        film_output = film_output.sum(dim=-1)
-        distances = self.euclidean_distance(film_output)  # batch_size x vocab_size
-        if distances.isnan().any():
-            print("distances are none")
-            exit()
-        normalized_distances = (distances - distances.mean()) / distances.std()
-        if normalized_distances.isnan().any():
-            print("normalized distances are nan")
-            exit()
-        probs = self.softmax(-normalized_distances)
+        full_input = self.embedding_matrix[inputs.int()]
+        flattened = full_input.flatten(start_dim=1, end_dim=2)
+        first = self.linear_layer(flattened)
+        # activated = self.activation(first)
+        # second_layer_output = self.second_layer(activated)
+        # sigmoid = self.sigmoid(second_layer_output)
+        first = (first - first.mean()) / first.std()
+        distance = self.euclidean_distance(first)
+        probs = self.softmax(-distance)
         return probs
 
     def euclidean_distance(self, outputs):
@@ -81,7 +67,7 @@ def loss_fn(preds, labels):
     return to_return
 
 
-def perplexity(preds, labels):
+def perplexity(labels, preds):
     """
     Compute the perplexity of predictions.
     :param labels: ground truth labels
@@ -101,7 +87,7 @@ def main():
     epochs = 10
     batch_size = 128
     embed_size = 80
-    learning_rate = 0.1
+    learning_rate = 0.001
 
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
@@ -115,13 +101,15 @@ def main():
     X0, Y0 = np.vstack([train_array[0:-2], train_array[1:-1]]).T, train_array[2:]
     X1, Y1 = np.vstack([test_array[0:-2], test_array[1:-1]]).T, test_array[2:]
     model = MyTrigram(len(vocab), batch_size, embed_size=embed_size).to(dev)
-
-    criterion = nn.CrossEntropyLoss()
+    criterion = loss_fn
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
     model.train()
     loss_iter = []
+    perplexity_iter = []
     for epoch in range(epochs):
+        perplexity_running_avg = 0
+        loss_running_avg = 0
+        to_print = []
         for i in range(0, len(X0), batch_size):
             inputs = torch.tensor(X0[i : i + batch_size], dtype=torch.float32).to(dev)
             targets = torch.tensor(Y0[i : i + batch_size], dtype=torch.long).to(dev)
@@ -130,11 +118,27 @@ def main():
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
-            perp = perplexity(outputs, targets)
-            loss_iter.append(loss.item())
-            spintorch.plot.plot_loss(loss_iter, plotdir, "losslr0.1embedlikeoutput")
-            print(f"Epoch {epoch} Batch {i} Loss: {loss} Perplexity: {perp}")
-        print("Epoch finished: perplexity: ", perp)
+            perp = perplexity(targets, outputs)
+            loss_running_avg = loss_running_avg + (loss.item() - loss_running_avg) / (
+                i + 1
+            )
+            perplexity_running_avg = perplexity_running_avg + (
+                perp.item() - perplexity_running_avg
+            ) / (i + 1)
+            loss_iter.append(loss_running_avg)
+            perplexity_iter.append(perplexity_running_avg)
+
+        print(
+            "Epoch finished: perplexity: ", perplexity_iter[-1], "loss: ", loss_iter[-1]
+        )
+        spintorch.plot.plot_loss(
+            np.array(loss_iter), plotdir, "linear_trigram_seperatematrix"
+        )
+        spintorch.plot.plot_loss(
+            np.array(perplexity_iter),
+            plotdir,
+            "linear_trigram_perplexity_seperatematrix",
+        )
 
 
 if __name__ == "__main__":

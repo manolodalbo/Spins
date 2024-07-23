@@ -7,6 +7,7 @@ def turn_into_wave(inputs, embedding_matrix):
     inputs = embedding_matrix[
         inputs.long()
     ]  # should return batch_size x words x embed_size
+    inputs = (inputs - 7.8e6) / 2.26e6
     inputs = inputs.transpose(-1, -2)
     to_return = fm_simpler(inputs)
     to_return = torch.flatten(to_return, start_dim=2, end_dim=-1).unsqueeze(-1)
@@ -22,7 +23,7 @@ def fm_simpler(inputs: torch.tensor, Fi: float = 0.5e9, Ff: float = 10e9):
         .unsqueeze(0)
         .unsqueeze(0)
     )
-    inputs = torch.sigmoid(0.3 * inputs)  # scaled between 0 and 1
+    inputs = torch.sigmoid(inputs)  # scaled between 0 and 1
     return torch.sin(2 * torch.pi * t * (Fi) + inputs.unsqueeze(-1) * (Ff - Fi))
 
 
