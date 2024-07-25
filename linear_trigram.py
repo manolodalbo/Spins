@@ -5,61 +5,38 @@ import torch.nn as nn
 from SpinTorch.spintorch.RNN_film import RNN_film
 import SpinTorch.spintorch as spintorch
 import os
-import matplotlib.pyplot as plt
 
 
 class MyTrigram(nn.Module):
-    def __init__(self, vocab_size, batch_size, embed_size=10, Bt=0.01):
+    def __init__(self, vocab_size, batch_size, embed_size=10, output_size=50, Bt=0.01):
         super(MyTrigram, self).__init__()
         self.vocab_size = vocab_size
         self.batch_size = batch_size
         self.embed_size = embed_size
-        self.Bt = Bt
-        self.film_RNN = RNN_film(
-            self.embed_size, batch_size=self.batch_size, output_size=80
-        )
-        self.embedding_matrix = nn.Parameter(
-            torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01)
-        )
-        # self.output_matrix = nn.Parameter(
-        #     torch.normal(torch.ones(self.vocab_size, self.embed_size) * 7.8e6, std=1e5)
-        # )
-        self.output_matrix = nn.Parameter(
-            torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01)
-        )
+        self.output_size = output_size
+        self.linear_layer = nn.Linear(2 * self.embed_size, self.output_size)
+        self.activation = nn.LeakyReLU()
+        self.second_layer = nn.Linear(50, self.vocab_size)
+        self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=-1)
+        self.embedding_matrix = nn.Parameter(
+            torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01),
+        )
+        self.output_matrix = nn.Parameter(
+            torch.normal(torch.zeros(self.vocab_size, self.output_size), std=0.01),
+        )
 
     def forward(self, inputs):
-        wave_inputs = turn_into_wave(inputs, self.embedding_matrix)
-        full_input = torch.cat(
-            [
-                wave_inputs,
-                torch.zeros(
-                    (wave_inputs.shape[0], wave_inputs.shape[1], 500, 1),
-                    device=wave_inputs.device,
-                ),
-            ],
-            dim=2,
-        )
-        film_output = self.film_RNN(full_input * self.Bt)
-        # it might be worthwhile to crop the output to only once both inputs have gone
-        # it might also make sense to just weight later outputs more strongly. linearly increasing weights?
-        film_output = film_output.sum(dim=-1)
-        print(f"ouput mean: {film_output.mean()}  output std: {film_output.std()}")
-        film_output = (film_output - film_output.mean()) * 5 / film_output.std()
-        print(
-            f"norm ouput mean: {film_output.mean()} norm output std: {film_output.std()}"
-        )
-
-        distances = self.euclidean_distance(film_output)  # batch_size x vocab_size
-        if distances.isnan().any():
-            print("distances are none")
-            exit()
-        normalized_distances = (distances - distances.mean()) / distances.std()
-        if normalized_distances.isnan().any():
-            print("normalized distances are nan")
-            exit()
-        probs = self.softmax(-distances)
+        full_input = self.embedding_matrix[inputs.int()]
+        flattened = full_input.flatten(start_dim=1, end_dim=2)
+        first = self.linear_layer(flattened)
+        activated = self.activation(first)
+        # second_layer_output = self.second_layer(activated)
+        # sigmoid = self.sigmoid(second_layer_output)
+        probs = self.softmax(activated)
+        # first = (first - first.mean()) / first.std()
+        # distance = self.euclidean_distance(first)
+        # probs = self.softmax(-distance)
         return probs
 
     def euclidean_distance(self, outputs):
@@ -86,14 +63,13 @@ class MyTrigram(nn.Module):
 
 
 def loss_fn(preds, labels):
-    print(preds[0])
     epsilon = 1e-8
     log_preds = torch.log(preds + epsilon)
     to_return = torch.nn.functional.nll_loss(log_preds, labels)
     return to_return
 
 
-def perplexity(preds, labels):
+def perplexity(labels, preds):
     """
     Compute the perplexity of predictions.
     :param labels: ground truth labels
@@ -127,13 +103,15 @@ def main():
     X0, Y0 = np.vstack([train_array[0:-2], train_array[1:-1]]).T, train_array[2:]
     X1, Y1 = np.vstack([test_array[0:-2], test_array[1:-1]]).T, test_array[2:]
     model = MyTrigram(len(vocab), batch_size, embed_size=embed_size).to(dev)
-
     criterion = loss_fn
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
     model.train()
     loss_iter = []
+    perplexity_iter = []
+    to_print = []
     for epoch in range(epochs):
+        perplexity_running_avg = 0
+        loss_running_avg = 0
         for i in range(0, len(X0), batch_size):
             inputs = torch.tensor(X0[i : i + batch_size], dtype=torch.float32).to(dev)
             targets = torch.tensor(Y0[i : i + batch_size], dtype=torch.long).to(dev)
@@ -142,13 +120,34 @@ def main():
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
-            perp = perplexity(outputs, targets)
-            loss_iter.append(loss.item())
-            spintorch.plot.plot_loss(
-                loss_iter, plotdir, "new_loss_output_normalizedstd5lr0.01"
+            perp = perplexity(targets, outputs)
+            loss_running_avg = loss_running_avg + (loss.item() - loss_running_avg) / (
+                i + 1
             )
-            print(f"Epoch {epoch} Batch {i} Loss: {loss} Perplexity: {perp}")
-        print("Epoch finished: perplexity: ", perp)
+            perplexity_running_avg = perplexity_running_avg + (
+                perp.item() - perplexity_running_avg
+            ) / (i + 1)
+            loss_iter.append(loss_running_avg)
+            perplexity_iter.append(perplexity_running_avg)
+            if epoch < 1 and i // batch_size < 200:
+                to_print.append(loss.item())
+            else:
+                spintorch.plot.plot_loss(
+                    np.array(to_print), plotdir, "loss_first_50_normal_linear"
+                )
+                exit()
+
+        print(
+            "Epoch finished: perplexity: ", perplexity_iter[-1], "loss: ", loss_iter[-1]
+        )
+        spintorch.plot.plot_loss(
+            np.array(loss_iter), plotdir, "linear_trigram_seperatematrix"
+        )
+        spintorch.plot.plot_loss(
+            np.array(perplexity_iter),
+            plotdir,
+            "linear_trigram_perplexity_seperatematrix",
+        )
 
 
 if __name__ == "__main__":

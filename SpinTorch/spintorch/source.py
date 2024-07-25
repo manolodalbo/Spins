@@ -13,6 +13,7 @@ class WaveSource(torch.nn.Module):
     def forward(self, B, Bt):
         Bs = B.clone()
         if Bt.shape[1] < 100:
+            reproduced = Bt.unsqueeze(2).repeat(1, 1, 8).flatten(start_dim=1, end_dim=2)
             number_to_add = 100 - Bt.shape[1]
             add_first = number_to_add // 2
             add_second = number_to_add - add_first
