@@ -14,7 +14,7 @@ class MyTrigram(nn.Module):
         self.batch_size = batch_size
         self.embed_size = embed_size
         self.output_size = output_size
-        self.linear_layer = nn.Linear(2 * self.embed_size, self.output_size)
+        self.linear_layer = nn.Linear(2 * self.embed_size, 50)
         self.activation = nn.LeakyReLU()
         self.second_layer = nn.Linear(50, self.vocab_size)
         self.sigmoid = nn.Sigmoid()
@@ -31,9 +31,9 @@ class MyTrigram(nn.Module):
         flattened = full_input.flatten(start_dim=1, end_dim=2)
         first = self.linear_layer(flattened)
         activated = self.activation(first)
-        # second_layer_output = self.second_layer(activated)
+        second_layer_output = self.second_layer(activated)
         # sigmoid = self.sigmoid(second_layer_output)
-        probs = self.softmax(activated)
+        probs = self.softmax(second_layer_output)
         # first = (first - first.mean()) / first.std()
         # distance = self.euclidean_distance(first)
         # probs = self.softmax(-distance)
@@ -95,6 +95,7 @@ def main():
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
 
     data_path = "../data"
+    data_path = "C:/spin/data"
     train_tokens, test_tokens, vocab = get_data(
         f"{data_path}/train.txt", f"{data_path}/test.txt"
     )
@@ -129,11 +130,14 @@ def main():
             ) / (i + 1)
             loss_iter.append(loss_running_avg)
             perplexity_iter.append(perplexity_running_avg)
-            if epoch < 1 and i // batch_size < 200:
+            if epoch < 1 and i // batch_size < 100:
                 to_print.append(loss.item())
             else:
                 spintorch.plot.plot_loss(
-                    np.array(to_print), plotdir, "loss_first_50_normal_linear"
+                    np.array(to_print), plotdir, "loss_first_50_normal_linear_simple",xlabel="Batch",title="Normal Digital Trigram"
+                )
+                spintorch.plot.plot_loss(
+                    np.array(loss_iter),plotdir,"average_loss_linear_trigram", xlabel="Batch", title="Digital Trigram Running Average"
                 )
                 exit()
 

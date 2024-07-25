@@ -18,11 +18,12 @@ mpl.rcParams["figure.figsize"] = [8.0, 6.0]
 mpl.rcParams["figure.dpi"] = 600
 
 
-def plot_loss(loss_iter, plotdir, unique_id):
+def plot_loss(loss_iter, plotdir, unique_id,xlabel = "Epoch",title=""):
     fig = plt.figure()
     plt.plot(loss_iter, "o-")
-    plt.xlabel("Epoch")
+    plt.xlabel(xlabel)
     plt.ylabel("Loss")
+    plt.title(title)
     plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
     fig.savefig(plotdir + "loss" + unique_id + ".png")
     plt.close(fig)
