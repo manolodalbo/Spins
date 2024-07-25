@@ -5,26 +5,31 @@ import torch.nn as nn
 from SpinTorch.spintorch.RNN_film import RNN_film
 import SpinTorch.spintorch as spintorch
 import os
+import matplotlib.pyplot as plt
 
 
 class MyTrigram(nn.Module):
-    def __init__(self, vocab_size, batch_size, embed_size=80, Bt=0.01):
+    def __init__(self, vocab_size, batch_size, embed_size=10, Bt=0.01):
         super(MyTrigram, self).__init__()
         self.vocab_size = vocab_size
         self.batch_size = batch_size
         self.embed_size = embed_size
         self.Bt = Bt
-        self.film_RNN = RNN_film(self.embed_size, self.batch_size)
+        self.film_RNN = RNN_film(
+            self.embed_size, batch_size=self.batch_size, output_size=80
+        )
         self.embedding_matrix = nn.Parameter(
             torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01)
         )
+        # self.output_matrix = nn.Parameter(
+        #     torch.normal(torch.ones(self.vocab_size, self.embed_size) * 7.8e6, std=1e5)
+        # )
         self.output_matrix = nn.Parameter(
-            torch.normal(torch.ones(self.vocab_size, self.embed_size) * 7.8e6, std=1e5)
+            torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01)
         )
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, inputs):
-        inputs = inputs
         wave_inputs = turn_into_wave(inputs, self.embedding_matrix)
         full_input = torch.cat(
             [
@@ -40,6 +45,12 @@ class MyTrigram(nn.Module):
         # it might be worthwhile to crop the output to only once both inputs have gone
         # it might also make sense to just weight later outputs more strongly. linearly increasing weights?
         film_output = film_output.sum(dim=-1)
+        print(f"ouput mean: {film_output.mean()}  output std: {film_output.std()}")
+        film_output = (film_output - film_output.mean()) * 5 / film_output.std()
+        print(
+            f"norm ouput mean: {film_output.mean()} norm output std: {film_output.std()}"
+        )
+
         distances = self.euclidean_distance(film_output)  # batch_size x vocab_size
         if distances.isnan().any():
             print("distances are none")
@@ -48,7 +59,7 @@ class MyTrigram(nn.Module):
         if normalized_distances.isnan().any():
             print("normalized distances are nan")
             exit()
-        probs = self.softmax(-normalized_distances)
+        probs = self.softmax(-distances)
         return probs
 
     def euclidean_distance(self, outputs):
@@ -75,6 +86,7 @@ class MyTrigram(nn.Module):
 
 
 def loss_fn(preds, labels):
+    print(preds[0])
     epsilon = 1e-8
     log_preds = torch.log(preds + epsilon)
     to_return = torch.nn.functional.nll_loss(log_preds, labels)
@@ -101,7 +113,7 @@ def main():
     epochs = 10
     batch_size = 128
     embed_size = 80
-    learning_rate = 0.1
+    learning_rate = 0.01
 
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
@@ -116,7 +128,7 @@ def main():
     X1, Y1 = np.vstack([test_array[0:-2], test_array[1:-1]]).T, test_array[2:]
     model = MyTrigram(len(vocab), batch_size, embed_size=embed_size).to(dev)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = loss_fn
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     model.train()
@@ -132,7 +144,9 @@ def main():
             optimizer.step()
             perp = perplexity(outputs, targets)
             loss_iter.append(loss.item())
-            spintorch.plot.plot_loss(loss_iter, plotdir, "losslr0.1embedlikeoutput")
+            spintorch.plot.plot_loss(
+                loss_iter, plotdir, "new_loss_output_normalizedstd5lr0.01"
+            )
             print(f"Epoch {epoch} Batch {i} Loss: {loss} Perplexity: {perp}")
         print("Epoch finished: perplexity: ", perp)
 

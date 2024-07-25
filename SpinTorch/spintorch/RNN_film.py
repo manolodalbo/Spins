@@ -3,7 +3,7 @@ import SpinTorch.spintorch as spintorch
 
 
 class RNN_film(nn.Module):
-    def __init__(self, embed_size=80, batch_size=64):
+    def __init__(self, embed_size=20, output_size=50, batch_size=64):
         super(RNN_film, self).__init__()
         dx = 50e-9  # discretization (m)
         dy = 50e-9  # discretization (m)
@@ -20,10 +20,11 @@ class RNN_film(nn.Module):
         geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
         src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
         probes = []
-        Np = embed_size  # number of probes
+        Np = output_size  # number of probes
         for p in range(Np):
             probes.append(spintorch.WaveIntensityProbe(nx - 15, int((ny - Np) / 2) + p))
         self.film = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
+        self.film.retain_history = False
 
     def forward(self, inputs):
         return self.film(inputs)

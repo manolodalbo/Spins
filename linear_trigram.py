@@ -8,33 +8,35 @@ import os
 
 
 class MyTrigram(nn.Module):
-    def __init__(self, vocab_size, batch_size, embed_size=80, Bt=0.01):
+    def __init__(self, vocab_size, batch_size, embed_size=10, output_size=50, Bt=0.01):
         super(MyTrigram, self).__init__()
         self.vocab_size = vocab_size
         self.batch_size = batch_size
         self.embed_size = embed_size
-        self.linear_layer = nn.Linear(2 * self.embed_size, self.embed_size)
+        self.output_size = output_size
+        self.linear_layer = nn.Linear(2 * self.embed_size, self.output_size)
         self.activation = nn.LeakyReLU()
-        self.second_layer = nn.Linear(50, self.embed_size)
+        self.second_layer = nn.Linear(50, self.vocab_size)
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=-1)
         self.embedding_matrix = nn.Parameter(
             torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01),
         )
         self.output_matrix = nn.Parameter(
-            torch.normal(torch.zeros(self.vocab_size, self.embed_size), std=0.01),
+            torch.normal(torch.zeros(self.vocab_size, self.output_size), std=0.01),
         )
 
     def forward(self, inputs):
         full_input = self.embedding_matrix[inputs.int()]
         flattened = full_input.flatten(start_dim=1, end_dim=2)
         first = self.linear_layer(flattened)
-        # activated = self.activation(first)
+        activated = self.activation(first)
         # second_layer_output = self.second_layer(activated)
         # sigmoid = self.sigmoid(second_layer_output)
-        first = (first - first.mean()) / first.std()
-        distance = self.euclidean_distance(first)
-        probs = self.softmax(-distance)
+        probs = self.softmax(activated)
+        # first = (first - first.mean()) / first.std()
+        # distance = self.euclidean_distance(first)
+        # probs = self.softmax(-distance)
         return probs
 
     def euclidean_distance(self, outputs):
@@ -87,7 +89,7 @@ def main():
     epochs = 10
     batch_size = 128
     embed_size = 80
-    learning_rate = 0.001
+    learning_rate = 0.01
 
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
@@ -106,10 +108,10 @@ def main():
     model.train()
     loss_iter = []
     perplexity_iter = []
+    to_print = []
     for epoch in range(epochs):
         perplexity_running_avg = 0
         loss_running_avg = 0
-        to_print = []
         for i in range(0, len(X0), batch_size):
             inputs = torch.tensor(X0[i : i + batch_size], dtype=torch.float32).to(dev)
             targets = torch.tensor(Y0[i : i + batch_size], dtype=torch.long).to(dev)
@@ -127,6 +129,13 @@ def main():
             ) / (i + 1)
             loss_iter.append(loss_running_avg)
             perplexity_iter.append(perplexity_running_avg)
+            if epoch < 1 and i // batch_size < 200:
+                to_print.append(loss.item())
+            else:
+                spintorch.plot.plot_loss(
+                    np.array(to_print), plotdir, "loss_first_50_normal_linear"
+                )
+                exit()
 
         print(
             "Epoch finished: perplexity: ", perplexity_iter[-1], "loss: ", loss_iter[-1]

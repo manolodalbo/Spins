@@ -1,12 +1,14 @@
 from functools import reduce
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 
 def turn_into_wave(inputs, embedding_matrix):
     inputs = embedding_matrix[
         inputs.long()
     ]  # should return batch_size x words x embed_size
+    print(f"input: {inputs[0]}")
     inputs = (inputs - 7.8e6) / 2.26e6
     inputs = inputs.transpose(-1, -2)
     to_return = fm_simpler(inputs)
@@ -24,7 +26,9 @@ def fm_simpler(inputs: torch.tensor, Fi: float = 0.5e9, Ff: float = 10e9):
         .unsqueeze(0)
     )
     inputs = torch.sigmoid(inputs)  # scaled between 0 and 1
-    return torch.sin(2 * torch.pi * t * (Fi) + inputs.unsqueeze(-1) * (Ff - Fi))
+    middle = t * ((Fi) + inputs.unsqueeze(-1) * (Ff - Fi))
+    to_return = torch.sin(2 * torch.pi * middle)
+    return to_return
 
 
 def fm(inputs: torch.tensor, Fi: float = 0.5e9, Ff: float = 10e9) -> torch.tensor:
