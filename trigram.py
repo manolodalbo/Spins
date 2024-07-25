@@ -62,6 +62,8 @@ def main():
     train_array = np.array(train_tokens)
     test_array = np.array(test_tokens)
     X0, Y0  = np.vstack([train_array[0:-2],train_array[1:-1]]).T, train_array[2:]
+    print(Y0)
+    print(Y0.shape)
     X1, Y1  = np.vstack([test_array[0:-2],test_array[1:-1]]).T, test_array[2:]
     model = MyTrigram(len(vocab),batch_size,embed_size=embed_size).to(dev)
 
