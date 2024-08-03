@@ -39,7 +39,7 @@ def create_solver(args):
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
-    Np = 2  # number of probes
+    Np = 10  # number of probes
     for p in range(Np):
         probes.append(
             spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
