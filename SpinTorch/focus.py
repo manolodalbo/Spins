@@ -13,7 +13,7 @@ from spintorch.multi_modal import MModel
 def parseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--learning_rate", type=float, default=0.0001)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--plot_name", type=str, default="")
     parser.add_argument("--Bt", type=float, default=1e-2)
@@ -61,9 +61,8 @@ def focus(args):
     savedir = "models/" + basedir
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
-    ifilm = create_solver(args, num_probes=2)
     cfilm = create_solver(args, num_probes=10)
-    model = MModel(ifilm, cfilm)
+    model = cfilm
 
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
@@ -113,7 +112,7 @@ def focus(args):
             for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
                 optimizer.zero_grad()
                 b0 = b1 - batch_size
-                u = model(INPUTS[b0:b1])
+                u = model(INPUTS[b0:b1]).sum(dim=-1)
                 print(f"output shape: {u.shape}")
                 loss = cross_entropy(u, OUTPUTS[b0:b1])
                 epoch_loss += loss.item()
@@ -168,7 +167,8 @@ def focus(args):
                         total_test_accuracy += test_accuracy
                     test_accuracy = total_test_accuracy / (i + 1)
                     print("Test Accuracy: %f" % (test_accuracy))
-            except:
+            except Exception as e:
+                print(e)
                 print("Test failed")
             toc()
 

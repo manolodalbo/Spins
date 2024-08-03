@@ -13,7 +13,7 @@ def parseArgs() -> argparse.Namespace:
     parser.add_argument("--points", type=int, default=3)
     parser.add_argument("--pooling", type=bool, default=False)
     parser.add_argument("--min_freq", type=float, default=1e9)
-    parser.add_argument("--max_freq", type=float, default=6e9)
+    parser.add_argument("--max_freq", type=float, default=10e9)
     parser.add_argument("--size", type=int, default=320)
     parser.add_argument("--all_classes", type=bool, default=False)
     parser.add_argument("--num", type=int, default=0)
