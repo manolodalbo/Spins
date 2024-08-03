@@ -8,6 +8,7 @@ import pickle
 from tqdm import tqdm
 import argparse
 from spintorch.multi_modal import MModel
+import matplotlib.pyplot as plt
 
 
 def parseArgs():
@@ -61,21 +62,24 @@ def focus(args):
     savedir = "models/" + basedir
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
-    cfilm = create_solver(args, num_probes=10)
+    cfilm = create_solver(args, num_probes=2)
     model = cfilm
 
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
     model.to(dev)  # sending model to GPU/CPU
-
-    with open("C:\spins\data\data.p", "rb") as data_file:
-        data_dict = pickle.load(data_file)
-    INPUTS = (data_dict["train_inputs"] * Bt).to(dev)
-    OUTPUTS = data_dict["train_labels"].to(dev)  # desired output
-    TEST_INPUTS = (data_dict["test_inputs"] * Bt).to(dev)
-    TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
-
+    min_freq = 1e9
+    max_freq = 10e9
+    timesteps = 600
+    dt = 20e-12
+    zero_to_one = torch.linspace(0,1,16)
+    freqs = (min_freq) + zero_to_one*(max_freq-min_freq)
+    print(freqs.shape)
+    t = torch.arange(0, timesteps*dt, dt).unsqueeze(0).unsqueeze(2)
+    print(t.shape)
+    INPUTS = torch.sin(2*torch.pi * t * freqs).transpose(0,2).to(dev)
+    OUTPUTS = zero_to_one.to(dev)
     """Define optimizer and lossfunction"""
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     epoch_init = -1
@@ -94,94 +98,29 @@ def focus(args):
         preds = outputs / (outputs.sum(dim=-1).unsqueeze(-1))
         loss = torch.nn.functional.cross_entropy(preds, target_index)
         return loss
+    def mse(outputs,target):
+        loss = (target - outputs)**2 / outputs.shape[0]
+        return loss
 
     """Train the network"""
     print(INPUTS.shape)
     tic()
     model.retain_history = False
-    high_accuracy = 0
     for epoch in range(epoch_init + 1, epochs):
-        with tqdm(
-            total=INPUTS.shape[0] // batch_size, desc=f"Epoch {epoch + 1}/{epochs}"
-        ) as pbar:
-            indices = torch.randperm(INPUTS.shape[0], device=dev)
-            INPUTS = INPUTS[indices]
-            OUTPUTS = OUTPUTS[indices]
-            epoch_loss = 0
-            epoch_accuracy = 0
-            for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
-                optimizer.zero_grad()
-                b0 = b1 - batch_size
-                u = model(INPUTS[b0:b1]).sum(dim=-1)
-                print(f"output shape: {u.shape}")
-                loss = cross_entropy(u, OUTPUTS[b0:b1])
-                epoch_loss += loss.item()
-                accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
-                epoch_accuracy += accuracy
-                if accuracy > high_accuracy:
-                    torch.save(
-                        {
-                            "epoch": epoch,
-                            "loss_iter": loss_iter,
-                            "model_state_dict": model.state_dict(),
-                        },
-                        savedir + "model_highest_accuracy" + args.plot_name + ".pt",
-                    )
-                stat_cuda("after forward")
-                loss.backward()
-                optimizer.step()
-                stat_cuda("after backward")
-                loss_iter.append(loss.item())  # store loss values
-                pbar.set_description(
-                    f"Batch {b + 1}/{INPUTS.shape[0]//batch_size}, Loss: {loss.item():.6f}, Accuracy: {accuracy.item():.6f}"
-                )
-                pbar.update(1)
-                try:
-                    spintorch.plot.plot_loss(loss_iter, plotdir, args.plot_name)
-                except:
-                    print("Plotting loss failed")
-            pbar.set_postfix_str(
-                f"Epoch Loss: {epoch_loss:.6f}, Epoch Accuracy: {epoch_accuracy / (b + 1):.6f}"
-            )
-            print(
-                "Epoch finished: %d -- Loss: %.6f -- Accuracy: %f"
-                % (epoch, epoch_loss, epoch_accuracy / (b + 1))
-            )
-            try:
-                with torch.no_grad():
-                    total_test_accuracy = 0
-                    for i in range(TEST_INPUTS.shape[0] // args.batch_size - 1):
-                        test_outputs = model(
-                            TEST_INPUTS[i * args.batch_size : (i + 1) * args.batch_size]
-                        )
-                        test_accuracy = (
-                            (
-                                test_outputs.argmax(dim=-1)
-                                == TEST_OUTPUTS[
-                                    i * args.batch_size : (i + 1) * args.batch_size
-                                ]
-                            )
-                            .float()
-                            .mean()
-                        )
-                        total_test_accuracy += test_accuracy
-                    test_accuracy = total_test_accuracy / (i + 1)
-                    print("Test Accuracy: %f" % (test_accuracy))
-            except Exception as e:
-                print(e)
-                print("Test failed")
-            toc()
-
-            """Save model checkpoint"""
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "loss_iter": loss_iter,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                },
-                savedir + "model_e%d" % (epoch) + args.plot_name + ".pt",
-            )
+        optimizer.zero_grad()
+        u = model(INPUTS).sum(dim=-1)
+        print(f"output shape: {u.shape}")
+        exit()
+        loss = mse(u, OUTPUTS)
+        stat_cuda("after forward")
+        loss.backward()
+        optimizer.step()
+        stat_cuda("after backward")
+        loss_iter.append(loss.item())  # store loss values
+        spintorch.plot.plot_loss(loss_iter, plotdir, args.plot_name)
+        plt.figure()
+        plt.plot()
+        print(f"Epoch finished: {epoch}")
 
 
 if __name__ == "__main__":
