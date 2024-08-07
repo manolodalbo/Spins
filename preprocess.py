@@ -174,8 +174,8 @@ def fm(inputs: np.array, Fi: float, Ff: float, samples_per_point: int) -> np.arr
                 if not pos_deriv:
                     phase = np.pi - phase
                 modulated_wave[i, points_per_input * j : points_per_input * (j + 1)] = (
-                    0.5 + pixel_intensity * (2)
-                ) * np.sin(2 * np.pi * frequency * t[1 : points_per_input + 1] + phase)
+                    np.sin(2 * np.pi * frequency * t[1 : points_per_input + 1] + phase)
+                )
                 if np.cos(2 * np.pi * frequency * t[points_per_input] + phase) > 0:
                     pos_deriv = True
                 else:
@@ -183,8 +183,8 @@ def fm(inputs: np.array, Fi: float, Ff: float, samples_per_point: int) -> np.arr
                 prev = np.sin(2 * np.pi * frequency * t[points_per_input] + phase)
             else:
                 modulated_wave[i, points_per_input * j : points_per_input * (j + 1)] = (
-                    0.5 + pixel_intensity * (2)
-                ) * np.sin(2 * np.pi * frequency * t[0:points_per_input])
+                    np.sin(2 * np.pi * frequency * t[0:points_per_input])
+                )
                 if np.cos(2 * np.pi * frequency * t[points_per_input - 1]) > 0:
                     pos_deriv = True
                 else:
