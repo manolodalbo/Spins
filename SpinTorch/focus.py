@@ -8,6 +8,18 @@ import pickle
 from tqdm import tqdm
 import argparse
 from spintorch.multi_modal import MModel
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.fft import fft, fftfreq
+from spintorch.plot import (
+    wave_integrated,
+    wave_snapshot,
+    wave_video,
+    wave_animation,
+    wave_intensity_animation,
+    save_wave_intensity,
+    save_wave_intensity_parallel,
+)
 
 
 def parseArgs():
@@ -33,13 +45,13 @@ def create_solver(args):
     B0 = 60e-3  # bias field (T)
 
     dt = 20e-12  # timestep (s)
-    batch_size = args.batch_size
+    batch_size = 1
 
     B1 = 50e-3  # training field multiplier (T)
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
-    Np = 10  # number of probes
+    Np = 1  # number of probes
     for p in range(Np):
         probes.append(
             spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
@@ -61,108 +73,95 @@ def focus(args):
     savedir = "models/" + basedir
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
-    films = []
-    for i in range(10):
-        films.append(create_solver(args))
-    model = MModel(films=films)
+    model = create_solver(args)
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
     model.to(dev)  # sending model to GPU/CPU
-    with open("C:\spins\data\data.p", "rb") as data_file:
-        data_dict = pickle.load(data_file)
-    INPUTS = torch.tensor(data_dict["train_inputs"] * Bt).unsqueeze(-1).to(dev)
-    OUTPUTS = data_dict["train_labels"].to(dev)  # desired output
-    TEST_INPUTS = torch.tensor(data_dict["test_inputs"] * Bt).unsqueeze(-1).to(dev)
-    TEST_OUTPUTS = data_dict["test_labels"].to(dev)  # desired output
-    """Define optimizer and lossfunction"""
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    epoch_init = -1
-    loss_iter = []
-    """Train the network"""
+    dt = 20e-12
+    timesteps = 100
+    t = (
+        torch.arange(0, timesteps * dt, dt, device=dev).unsqueeze(0).unsqueeze(2)
+    )  # time vector
+    t_longer = torch.arange(0, 700 * dt, dt, device=dev).unsqueeze(0).unsqueeze(2)
+    # INPUTS = Bt * torch.cat((torch.ones(1, 100, 1), torch.zeros(1, 1000, 1)), dim=1).to(
+    #     dev
+    # )  # excitation field
+    INPUTS = torch.cat(
+        (
+            Bt * torch.sin(2 * torch.pi * 1e9 * t),
+            torch.zeros((1, 1000, 1), device=dev),
+        ),
+        dim=1,
+    ).to(dev)
+    # INPUTS2 = Bt * torch.sin(2 * torch.pi * 3e9 * t_longer).to(dev)  # excitation field
     print(INPUTS.shape)
     tic()
-    model.retain_history = False
-    high_accuracy = 0
-    for epoch in range(epoch_init + 1, epochs):
-        with tqdm(
-            total=INPUTS.shape[0] // batch_size, desc=f"Epoch {epoch + 1}/{epochs}"
-        ) as pbar:
-            indices = torch.randperm(INPUTS.shape[0], device=dev)
-            INPUTS = INPUTS[indices]
-            OUTPUTS = OUTPUTS[indices]
-            epoch_loss = 0
-            epoch_accuracy = 0
-            for b, b1 in enumerate(range(batch_size, INPUTS.shape[0] + 1, batch_size)):
-                b0 = b1 - batch_size
-                u = model(INPUTS[b0:b1])
-                loss = torch.nn.functional.cross_entropy(u, OUTPUTS[b0:b1])
-                epoch_loss += loss.item()
-                accuracy = (u.argmax(dim=-1) == OUTPUTS[b0:b1]).float().mean()
-                epoch_accuracy += accuracy
-                if accuracy > high_accuracy:
-                    torch.save(
-                        {
-                            "epoch": epoch,
-                            "loss_iter": loss_iter,
-                            "model_state_dict": model.state_dict(),
-                        },
-                        savedir + "model_highest_accuracy" + args.plot_name + ".pt",
-                    )
-                stat_cuda("after forward")
-                loss.backward()
-                optimizer.step()
-                stat_cuda("after backward")
-                loss_iter.append(loss.item())  # store loss values
-                pbar.set_description(
-                    f"Batch {b + 1}/{INPUTS.shape[0]//batch_size}, Loss: {loss.item():.6f}, Accuracy: {accuracy.item():.6f}"
-                )
-                pbar.update(1)
-                try:
-                    spintorch.plot.plot_loss(loss_iter, plotdir, args.plot_name)
-                except:
-                    print("Plotting loss failed")
-            pbar.set_postfix_str(
-                f"Epoch Loss: {epoch_loss:.6f}, Epoch Accuracy: {epoch_accuracy / (b + 1):.6f}"
-            )
-            print(
-                "Epoch finished: %d -- Loss: %.6f -- Accuracy: %f"
-                % (epoch, epoch_loss, epoch_accuracy / (b + 1))
-            )
-            try:
-                with torch.no_grad():
-                    total_test_accuracy = 0
-                    for i in range(TEST_INPUTS.shape[0] // args.batch_size - 1):
-                        test_outputs = model(
-                            TEST_INPUTS[i * args.batch_size : (i + 1) * args.batch_size]
-                        )
-                        test_accuracy = (
-                            (
-                                test_outputs.argmax(dim=-1)
-                                == TEST_OUTPUTS[
-                                    i * args.batch_size : (i + 1) * args.batch_size
-                                ]
-                            )
-                            .float()
-                            .mean()
-                        )
-                        total_test_accuracy += test_accuracy
-                    test_accuracy = total_test_accuracy / (i + 1)
-                    print("Test Accuracy: %f" % (test_accuracy))
-            except:
-                print("Test failed")
-            toc()
+    model.retain_history = True
+    outputs = model(INPUTS)
+    # outputs2 = model(INPUTS2)
+    plt.figure(figsize=(10, 6))
+    plt.plot(outputs[0, 0, :].detach().cpu().numpy())
+    plt.title("Output")
+    plt.savefig("output_sin_spike_1e9.png")
+    plt.close()
+    exit()
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(outputs[0, 1, 4500:].detach().cpu().numpy())
+    # plt.title("Output Smaller")
+    # plt.savefig("output_second_half.png")
+    # plt.close()
 
-            """Save model checkpoint"""
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "loss_iter": loss_iter,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                },
-                savedir + "model_e%d" % (epoch) + args.plot_name + ".pt",
+    # signal = outputs[0].detach().squeeze().cpu().numpy()
+    # signal = signal[1, 3000:3500]
+    # yf = fft(signal)
+    # xf = fftfreq(len(signal), 20e-12)[: len(signal) // 2]
+
+    # # Plot the results
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(xf, 2.0 / len(signal) * np.abs(yf[: len(signal) // 2]))
+    # plt.title("Fourier Transform")
+    # plt.xlabel("Frequency (Hz)")
+    # plt.ylabel("Amplitude")
+    # plt.grid()
+    # plt.savefig("frequencies.png")
+    # plt.close()
+    # cutoff_frequency = 0.5e9  # 1 GHz
+
+    # Filter out higher frequencies
+    # print(xf.min())
+    # low_freq_indices = xf > cutoff_frequency
+    # xf_filtered = xf[low_freq_indices]
+    # yf_filtered = 2.0 / len(signal) * np.abs(yf[: len(signal) // 2])[low_freq_indices]
+
+    # Plot the results
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(xf_filtered, yf_filtered)
+    # plt.title("Fourier Transform (Lower Frequencies)")
+    # plt.xlabel("Frequency (Hz)")
+    # plt.ylabel("Amplitude")
+    # plt.grid()
+    # plt.savefig("high_freqs6e9.png")
+    # exit()
+    if model.retain_history:
+        with torch.no_grad():
+            mz = (
+                torch.stack(model.m_history, 1)[
+                    0,
+                    :,
+                    2,
+                ]
+                - model.m0[
+                    0,
+                    2,
+                ]
+                .unsqueeze(0)
+                .cpu()
             )
+            # wave_integrated(model, mz, plotdir + "wave_integrated_7200.png")
+            # save_wave_intensity(model, mz, "plots/to_view/")
+            # wave_intensity_animation(model, mz, "plots/video")
+            save_wave_intensity_parallel(model, mz, "plots/spike/")
 
 
 if __name__ == "__main__":

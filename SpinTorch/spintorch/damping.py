@@ -30,8 +30,10 @@ class Damping(nn.Module):
                 self.alpha_max - self.alpha
             ) + self.alpha
         Rho = -log(((self.alpha_real_max - self.alpha_min) / (A - self.alpha_min)) - 1)
-        self.register_parameter("Rho", nn.Parameter(Rho))  # for optimizing damping
-        # self.register_buffer("Rho", Rho)#this is for when don't want to optiize the damping
+        # self.register_parameter("Rho", nn.Parameter(Rho))  # for optimizing damping
+        self.register_buffer(
+            "Rho", Rho
+        )  # this is for when don't want to optiize the damping
 
     def forward(self, relax=False):
         if relax:
