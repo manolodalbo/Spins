@@ -152,7 +152,7 @@ def damping(model, plotdir=""):
     # )
     damping_field = damping.Rho.detach().cpu().squeeze().numpy().transpose()
     damping_field = damping_field[10:90, 10:90]
-    print("damping field miniumum: ", damping_field.min())
+
     fig, ax = plt.subplots(1, 1, constrained_layout=True)
     h = ax.imshow(damping_field, origin="lower", cmap=plt.cm.viridis)
     plt.colorbar(h, ax=ax, label="Damping field")

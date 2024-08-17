@@ -25,16 +25,18 @@ class WaveGeometryFreeForm(WaveGeometry):
     def __init__(self, dim: tuple, d: tuple, B0: float, B1: float, Ms: float):
 
         super().__init__(dim, d, B0, Ms)
-        self.rho_param = nn.Parameter(torch.normal(mean=0, std=1e-3, size=(1, dim[1])))
-        self.rho = self.rho_param.repeat(100, 1)
+        self.rho_param = nn.Parameter(
+            torch.normal(mean=0, std=0, size=(dim[0], 1), device="cuda")
+        )
+
         self.register_buffer("B", zeros((3,) + dim))
         self.register_buffer("B1", tensor(B1))
         self.B[1,] = self.B0
 
     def forward(self):
         self.B = torch.zeros_like(self.B)
-
-        self.B[1,] = self.B1 * self.rho + self.B0
+        rho = self.rho_param.repeat(1, 100)
+        self.B[1,] = self.B1 * rho + self.B0
         return self.B
 
 
@@ -44,9 +46,9 @@ class WaveGeometryMs(WaveGeometry):
         super().__init__(dim, d, B0, Ms)
 
         self.rho_y = nn.Parameter(
-            ones((1, dim[1]))
+            ones((dim[0], 1))
         )  # this is the only trainable parameter usually
-        self.rho = self.rho_y.repeat(100, 1)
+        self.rho = self.rho_y.repeat(1, 100)
         # self.register_buffer("rho",ones(dim)) #can alter this so that we are no longer training with rho
         self.register_buffer("Msat", zeros(dim))
         self.register_buffer("B0", tensor(B0))

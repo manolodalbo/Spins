@@ -79,7 +79,7 @@ def focus(args):
     print("Running on", dev)
     model.to(dev)  # sending model to GPU/CPU
     dt = 20e-12
-    timesteps = 100
+    timesteps = 200
     t = (
         torch.arange(0, timesteps * dt, dt, device=dev).unsqueeze(0).unsqueeze(2)
     )  # time vector
@@ -89,8 +89,8 @@ def focus(args):
     # )  # excitation field
     INPUTS = torch.cat(
         (
-            Bt * torch.sin(2 * torch.pi * 1e9 * t),
-            torch.zeros((1, 1000, 1), device=dev),
+            Bt * torch.sin(2 * torch.pi * 3e9 * t),
+            torch.zeros((1, 800, 1), device=dev),
         ),
         dim=1,
     ).to(dev)
@@ -98,12 +98,17 @@ def focus(args):
     print(INPUTS.shape)
     tic()
     model.retain_history = True
-    outputs = model(INPUTS)
+    outputs = model(INPUTS).squeeze()
     # outputs2 = model(INPUTS2)
+    sum = 0
+    for i in range(len(outputs)):
+        sum += outputs[i] * i
+    mean = sum / outputs.sum()
+    print(f"mean: {mean}")
     plt.figure(figsize=(10, 6))
-    plt.plot(outputs[0, 0, :].detach().cpu().numpy())
+    plt.plot(outputs.detach().cpu().numpy())
     plt.title("Output")
-    plt.savefig("output_sin_spike_1e9.png")
+    plt.savefig("output_neg_free.png")
     plt.close()
     exit()
     # plt.figure(figsize=(10, 6))
