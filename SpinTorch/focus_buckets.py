@@ -103,8 +103,8 @@ def focus(args):
     print(INPUTS.shape)
     tic()
     model.retain_history = True
-    epochs = 40
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    epochs = 500
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     loss_iter = []
     for epoch in range(epochs):
         optimizer.zero_grad()
@@ -115,26 +115,42 @@ def focus(args):
             outputs.shape[1],
             outputs.shape[2] // t_per_bucket,
             t_per_bucket,
-        ).sum(dim=-1)
-
-        norm_buckets = (
-            (buckets - buckets.mean())
+        )
+        freq_buckets = extract_average_frequency(buckets, dt)
+        freq_norm = (
+            (freq_buckets - freq_buckets.mean())
             * torch.tensor(0.7746, device="cuda")
-            / (buckets.std())
+            / (freq_buckets.std())
+        ) + 0.1
+        amp_buckets = buckets.sum(dim=-1)
+        amp_normalized = (
+            (amp_buckets - amp_buckets.mean())
+            * torch.tensor(0.7746, device="cuda")
+            / (amp_buckets.std())
         ) + 0.1
         plt.figure(figsize=(10, 6))
-        plt.plot(norm_buckets[0, 0, :].detach().cpu().numpy())
+        plt.plot(amp_normalized[0, 0, :].detach().cpu().numpy())
         plt.title("Bucket Outputs")
-        plt.savefig(f"bucket_output_{epoch}.png")
+        plt.savefig(f"amp_temp_output.png")
         plt.close()
-        loss = torch.nn.functional.mse_loss(norm_buckets.squeeze(), OUTPUTS)
+        plt.figure(figsize=(10, 6))
+        plt.plot(freq_norm[0, 0, :].detach().cpu().numpy())
+        plt.title("Bucket Outputs")
+        plt.savefig(f"freq_temp_output.png")
+        plt.close()
+        full_output = torch.cat(
+            [amp_normalized.squeeze(0), freq_norm.squeeze(0)], dim=0
+        )
+        loss = torch.nn.functional.mse_loss(
+            full_output, OUTPUTS.unsqueeze(0).repeat(2, 1)
+        )
         loss_iter.append(loss.item())
         plt.figure(figsize=(10, 6))
         plt.plot(loss_iter, "o-")
         plt.title("Loss")
         plt.xlabel("epoch")
         plt.ylabel("loss")
-        plt.savefig("loss_damping.png")
+        plt.savefig("loss_damping_temp.png")
         plt.close()
         loss.backward()
         # for name, param in model.named_parameters():
@@ -145,11 +161,11 @@ def focus(args):
         #     else:
         #         print(f"name missed: {name}")
         optimizer.step()
-        with torch.no_grad():
-            spintorch.plot.geometry(
-                model, plotdir=plotdir + "geometry.png", epoch=epoch
-            )
-            spintorch.plot.damping(model, plotdir=plotdir + "damping.png")
+        # with torch.no_grad():
+        #     spintorch.plot.geometry(
+        #         model, plotdir=plotdir + "geometry.png", epoch=epoch
+        #     )
+        #     spintorch.plot.damping(model, plotdir=plotdir + "damping.png")
         print(f"Epoch {epoch} Loss: {loss.item()}")
     plt.figure(figsize=(10, 6))
     plt.plot(outputs[0, 0, :].detach().cpu().numpy())
@@ -175,6 +191,41 @@ def focus(args):
             # save_wave_intensity(model, mz, "plots/to_view/")
             # wave_intensity_animation(model, mz, "plots/video")
             save_wave_intensity_parallel(model, mz, "plots/spike/")
+
+
+import torch
+
+
+def extract_average_frequency(signals: torch.Tensor, dt: float):
+    signal_length = signals.shape[-1]
+
+    # Compute FFT along the last dimension
+    fft_result = torch.abs(torch.fft.fft(signals, dim=-1))
+
+    # Apply the threshold
+    fft_result[fft_result < 10] = 0
+
+    # Calculate the sampling rate
+    sampling_rate = 1 / dt
+
+    # Compute frequency values for each signal
+    freq = torch.fft.fftfreq(signal_length, 1 / sampling_rate, device=signals.device)
+
+    # Ensure freq is correctly shaped to broadcast over all preceding dimensions
+    freq = freq.view(*([1] * (signals.ndim - 1)), -1)
+
+    # Compute the weighted average of frequencies
+    mult = freq * fft_result
+    average = mult[..., : signal_length // 2].sum(dim=-1) / fft_result[
+        ..., : signal_length // 2
+    ].abs().sum(dim=-1)
+
+    return average
+
+
+# Example usage:
+# signals = torch.randn(batch_size, num_signals, signal_length)
+# avg_freqs = extract_average_frequency(signals, dt)
 
 
 if __name__ == "__main__":

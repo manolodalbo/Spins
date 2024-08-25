@@ -46,6 +46,7 @@ plt.show()
 def extract_average_frequency(signal: torch.tensor):
     fft_result = abs(torch.fft.fft(signal))
     fft_result[fft_result < 10] = 0
+    freq = torch.fft.fftfreq(len(signal), 1 / sampling_rate)
     mult = freq * fft_result
     average = (
         mult[: mult.shape[0] // 2].sum() / abs(fft_result[: mult.shape[0] // 2]).sum()

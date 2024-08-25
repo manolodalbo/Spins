@@ -24,11 +24,11 @@ from spintorch.plot import (
 
 def parseArgs():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=400)
+    parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--plot_name", type=str, default="")
-    parser.add_argument("--Bt", type=float, default=1e-3)
+    parser.add_argument("--Bt", type=float, default=1e-2)
     args = parser.parse_args()
     return args
 
@@ -97,14 +97,32 @@ def focus(args):
     # INPUTS2 = Bt * torch.sin(2 * torch.pi * 3e9 * t_longer).to(dev)  # excitation field
     print(INPUTS.shape)
     tic()
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     model.retain_history = True
-    outputs = model(INPUTS).squeeze()
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        outputs = model(INPUTS).squeeze()
+        plt.figure(figsize=(10, 6))
+        plt.plot(outputs.detach().cpu().numpy())
+        plt.title("Output")
+        plt.savefig(f"output_{epoch}.png")
+        plt.close()
+        average_freq = extract_average_frequency(outputs, dt)
+        print(f"epoch: {epoch} average freq: {average_freq:.2e}")
+        loss = torch.nn.functional.mse_loss(
+            average_freq, torch.tensor(6e9, device=average_freq.device)
+        )
+        print(f"loss: {loss.item():.2e}")
+        loss.backward()
+        optimizer.step()
+    exit()
     # outputs2 = model(INPUTS2)
-    sum = 0
-    for i in range(len(outputs)):
-        sum += outputs[i] * i
-    mean = sum / outputs.sum()
-    print(f"mean: {mean}")
+    # sum = 0
+    # for i in range(len(outputs)):
+    #     sum += outputs[i] * i
+    # mean = sum / outputs.sum()
+    # print(f"mean: {mean}")
+
     plt.figure(figsize=(10, 6))
     plt.plot(outputs.detach().cpu().numpy())
     plt.title("Output")
@@ -167,6 +185,19 @@ def focus(args):
             # save_wave_intensity(model, mz, "plots/to_view/")
             # wave_intensity_animation(model, mz, "plots/video")
             save_wave_intensity_parallel(model, mz, "plots/spike/")
+
+
+def extract_average_frequency(signal: torch.tensor, dt: float):
+    fft_result = abs(torch.fft.fft(signal))
+    fft_result[fft_result < 10] = 0
+    sampling_rate = 1 / dt
+    freq = torch.fft.fftfreq(len(signal), 1 / sampling_rate, device=signal.device)
+
+    mult = freq * fft_result
+    average = (
+        mult[: mult.shape[0] // 2].sum() / abs(fft_result[: mult.shape[0] // 2]).sum()
+    )
+    return average
 
 
 if __name__ == "__main__":

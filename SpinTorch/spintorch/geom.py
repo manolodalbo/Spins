@@ -36,6 +36,7 @@ class WaveGeometryFreeForm(WaveGeometry):
     def forward(self):
         self.B = torch.zeros_like(self.B)
         rho = self.rho_param.repeat(1, 100)
+        # rho = self.rho_param
         self.B[1,] = self.B1 * rho + self.B0
         return self.B
 
