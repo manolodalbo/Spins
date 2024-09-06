@@ -26,7 +26,7 @@ class WaveGeometryFreeForm(WaveGeometry):
 
         super().__init__(dim, d, B0, Ms)
         self.rho_param = nn.Parameter(
-            torch.normal(mean=0, std=0, size=(dim[0], 1), device="cuda")
+            torch.normal(mean=0, std=0, size=(dim[0], dim[1]), device="cuda")
         )
 
         self.register_buffer("B", zeros((3,) + dim))
@@ -35,8 +35,8 @@ class WaveGeometryFreeForm(WaveGeometry):
 
     def forward(self):
         self.B = torch.zeros_like(self.B)
-        rho = self.rho_param.repeat(1, 100)
-        # rho = self.rho_param
+        # rho = self.rho_param.repeat(1, 100)
+        rho = self.rho_param
         self.B[1,] = self.B1 * rho + self.B0
         return self.B
 

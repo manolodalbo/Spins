@@ -65,23 +65,19 @@ class MMSolver(nn.Module):
         outputs = self.run(self.m0, B_ext, Msat, signal)  # run the simulation
         self.fwd = False
         concatted = cat(outputs, dim=-1)
-        return concatted  # returns batch_size X number of probesx timesteps.
+        return concatted  # returns batch_size X number of probes.
 
     def run(self, m, B_ext, Msat, signal):
         """Run the simulation in multiple stages for checkpointing"""
         # this essentially loops through the
         outputs = []
-        N = int(np.sqrt(signal.size()[1]))  # number of stages
-        N = int(signal.size()[1] / 25)
-        chunked = signal.chunk(N, dim=1)
-        # print(torch.tensor(chunked).size())
+        N = int(np.sqrt(signal.size()[2]))  # number of stages
+        N = int(signal.size()[2] / 25)
+        chunked = signal.chunk(N, dim=2)
+
         # this splits up the signal into smaller chunks. Effectively dividing into N different groups
         # corresponding to the time steps
-        # print("after chunking")
-        # print(len(chunked))
-        # for part in chunked:
-        #     print(part.size())
-        # exit()
+
         for stage, sig in enumerate(chunked):
             output, m = checkpoint(
                 self.run_stage, m, B_ext, Msat, sig, use_reentrant=False
@@ -93,8 +89,7 @@ class MMSolver(nn.Module):
         """Run a subset of timesteps (needed for 2nd level checkpointing)"""
         outputs = empty(0, device=self.dt.device)
         # Loop through the signal
-        for sig in signal.split(1, dim=1):
-
+        for sig in signal.split(1, dim=2):
             B_ext = self.inject_sources(B_ext, sig)
             # Propagate the fields (with checkpointing to save memory)
             m = checkpoint(self.rk4_step_LLG, m, B_ext, Msat, use_reentrant=False)
@@ -112,7 +107,7 @@ class MMSolver(nn.Module):
         """
         for i, src in enumerate(self.sources):
             B_ext = src(
-                B_ext, sig[:, 0, i]
+                B_ext, sig[:, :, 0, i]
             )  # changed this to be compattible with different batch sizes.
         return B_ext
 

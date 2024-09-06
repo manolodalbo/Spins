@@ -52,8 +52,6 @@ def load_and_preprocess_data(args: argparse.Namespace):
     )
     if args.pooling:
         train_inputs = pool(train_inputs)
-        print("shape of train inputs after pooling:")
-        print(train_inputs.shape)
         test_inputs = pool(test_inputs)
     dig_train_inputs = (
         train_inputs.reshape(-1, train_inputs.shape[-1] * train_inputs.shape[-2]) / 255
@@ -62,7 +60,7 @@ def load_and_preprocess_data(args: argparse.Namespace):
         test_inputs.reshape(-1, test_inputs.shape[-1] * test_inputs.shape[-2]) / 255
     )
     refined_inputs = []
-    refined_ouputs = []
+    refined_outputs = []
     if args.all_classes == False:
         zeros = 0
         others = 0
@@ -70,16 +68,16 @@ def load_and_preprocess_data(args: argparse.Namespace):
         while zeros < args.size // 2 or others < args.size // 2:
             if train_labels[i] == args.num and zeros < args.size // 2:
                 refined_inputs.append(dig_train_inputs[i])
-                refined_ouputs.append(train_labels[i])
+                refined_outputs.append(train_labels[i])
                 zeros = zeros + 1
             if train_labels[i] != args.num and others < args.size // 2:
                 refined_inputs.append(dig_train_inputs[i])
-                refined_ouputs.append(train_labels[i])
+                refined_outputs.append(train_labels[i])
                 others = others + 1
             i += 1
     else:
         refined_inputs = dig_train_inputs[0 : args.size]
-        refined_ouputs = remap_labels(train_labels[0 : args.size], label_mapping)
+        refined_outputs = remap_labels(train_labels[0 : args.size], label_mapping)
     new_test_inputs = []
     new_test_labels = []
     if args.all_classes == False:
@@ -106,16 +104,22 @@ def load_and_preprocess_data(args: argparse.Namespace):
         testing_size = int(0.2 * args.size) if int(0.2 * args.size) >= 320 else 320
         new_test_inputs = dig_test_inputs[0:testing_size]
         new_test_labels = remap_labels(test_labels[0:testing_size], label_mapping)
-    train_inputs = fm(
-        np.array(refined_inputs), args.min_freq, args.max_freq, args.points
-    )
-    test_inputs = fm(
-        np.array(new_test_inputs), args.min_freq, args.max_freq, args.points
-    )
-    train_labels = tensor(refined_ouputs, dtype=torch.long)
+    # train_inputs = fm(
+    #     np.array(refined_inputs), args.min_freq, args.max_freq, args.points
+    # )
+    train_inputs = tensor(refined_inputs, dtype=torch.float32)
+    print(f"train_inputs shape: {train_inputs.shape}")
+    test_inputs = tensor(new_test_inputs, dtype=torch.float32)
+    print(f"test_inputs shape: {test_inputs.shape}")
+    # test_inputs = fm(
+    #     np.array(new_test_inputs), args.min_freq, args.max_freq, args.points
+    # )
+    train_labels = tensor(refined_outputs, dtype=torch.long)
+    print(train_labels[0:100])
     test_labels = tensor(new_test_labels, dtype=torch.long)
+    print(test_labels[0:100])
     if args.all_classes == False:
-        with open(f"C:/spins/data/data_{args.num}.p", "wb") as pickle_file:
+        with open(f"C:/spins/data/data_no_fm.p", "wb") as pickle_file:
             pickle.dump(
                 dict(
                     train_inputs=train_inputs,
@@ -204,10 +208,9 @@ def pool(inputs: np.array):
     inputs = inputs.unsqueeze(1)
     # the output width and heigh is governed by the following equation assuming no padding:
     # w_f = (w_i + filter_width)/stride and the same for heigh
-    pooling_layer = torch.nn.AvgPool2d(kernel_size=(2, 2), stride=2, padding=0)
+    pooling_layer = torch.nn.AvgPool2d(kernel_size=(3, 3), stride=3, padding=0)
     pooled = pooling_layer(inputs).squeeze()
     to_return = pooled.numpy()
-
     return to_return
 
 

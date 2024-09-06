@@ -12,9 +12,19 @@ class WaveSource(torch.nn.Module):
 
     def forward(self, B, Bt):
         Bs = B.clone()
-        Bs[:, self.dim, self.x, self.y] = Bs[
-            :, self.dim, self.x, self.y
-        ] + Bt.unsqueeze(-1)
+        if Bt.shape[1] < 100:
+            number_to_add = 100 - Bt.shape[1]
+            add_first = number_to_add // 2
+            add_second = number_to_add - add_first
+            Bt = torch.cat(
+                (
+                    torch.zeros(Bt.shape[0], add_first, device=Bt.device),
+                    Bt,
+                    torch.zeros(Bt.shape[0], add_second, device=Bt.device),
+                ),
+                dim=1,
+            )
+        Bs[:, self.dim, self.x, self.y] = Bs[:, self.dim, self.x, self.y] + Bt
         return Bs
 
     def coordinates(self):
