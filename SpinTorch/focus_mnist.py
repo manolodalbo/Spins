@@ -43,12 +43,12 @@ def create_solver(args):
     geom = spintorch.WaveGeometryFreeForm((nx, ny), (dx, dy, dz), B0, B1, Ms)
     src = spintorch.WaveLineSource(10, 0, 10, ny - 1, dim=2)
     probes = []
-    Np = 10  # number of probes
+    Np = 70  # number of probes
     for p in range(Np):
-        # probes.append(spintorch.WaveIntensityProbe(nx - 15, ((ny - Np) // 2) + p))
-        probes.append(
-            spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
-        )
+        probes.append(spintorch.WaveIntensityProbe(nx - 15, ((ny - Np) // 2) + p))
+        # probes.append(
+        #     spintorch.WaveIntensityProbeDisk(nx - 15, int(ny * (p + 1) / (Np + 1)), 2)
+        # )
     film = spintorch.MMSolver(geom, dt, batch_size, [src], probes)
     return film
 
@@ -68,7 +68,7 @@ def focus(args):
     savedir = "models/" + basedir
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
-    model = OldModel(create_solver(args), output_size=70)
+    model = MModel(create_solver(args), output_size=70)
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
@@ -143,13 +143,13 @@ def focus(args):
                 f"epoch: {epoch}, batch: {i//batch_size} loss: {loss.item()}, accuracy: {accuracy.item()}"
             )
             loss_iter.append(loss.item())
-            plt.figure(figsize=(10, 6))
-            plt.plot(loss_iter, "o-")
-            plt.title("Loss")
-            plt.xlabel("epoch")
-            plt.ylabel("loss")
-            plt.savefig("loss_original.png")
-            plt.close()
+            # plt.figure(figsize=(10, 6))
+            # plt.plot(loss_iter, "o-")
+            # plt.title("Loss")
+            # plt.xlabel("epoch")
+            # plt.ylabel("loss")
+            # plt.savefig("loss_output_m_fixed_two.png")
+            # plt.close()
             loss.backward()
             torch.save(
                 {
@@ -157,7 +157,7 @@ def focus(args):
                     "loss_iter": loss_iter,
                     "model state dict": model.state_dict(),
                 },
-                savedir + "amp_model.pt",
+                savedir + "multi_model.pt",
             )
             # for name, param in model.named_parameters():
             #     if name == "geom.rho_param":

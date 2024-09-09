@@ -9,6 +9,9 @@ class MModel(nn.Module):
         self.output_matrix = nn.Parameter(
             torch.normal(torch.zeros(10, output_size, 2 * 16), std=0.01)
         )
+        # self.output_matrix = torch.normal(
+        #     torch.zeros(10, output_size, 2 * 16), std=1
+        # ).to("cuda")
         self.softamx = nn.Softmax(dim=-1)
 
     def forward(self, x):
@@ -26,6 +29,7 @@ class MModel(nn.Module):
         amp_norm = (amp_buckets - amp_buckets.mean()) / amp_buckets.std()
         freq_and_amp = torch.cat((freq_norm, amp_norm), dim=-1)
         distance = self.distance(freq_and_amp)
+        # distance = distance / distance.sum(dim=-1).unsqueeze(-1)
         probs = self.softamx(-distance)
         return probs
 

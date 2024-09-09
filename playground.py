@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 # Parameters
 # sampling_rate = 100  # Hz
@@ -65,4 +66,35 @@ def show_plot():
     plt.show()
 
 
-show_plot()
+def show_output_matrix():
+    # for parameter in torch.load(
+    #     "C:/spins/Spins/SpinTorch/models/focus_Ms/multi_model.pt"
+    # )["model state dict"]:
+    #     print(parameter)
+    output_matrix = torch.load(
+        "C:/spins/Spins/SpinTorch/models/focus_Ms/multi_model.pt"
+    )["model state dict"]["output_matrix"]
+    print(output_matrix.mean())
+    print(output_matrix.std())
+    # array = output_matrix[0].cpu().numpy()
+    # a, b = array.shape
+    # x = np.arange(0, a)
+    # y = np.arange(0, b)
+    # X, Y = np.meshgrid(x, y)
+
+    # # Create the figure and 3D axis
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection="3d")
+    # print(X.shape)
+    # print(Y.shape)
+    # # Plot the surface
+    # ax.plot_surface(X.T, Y.T, array, cmap="viridis")
+
+    # # Set axis labels
+    # ax.set_xlabel("Probes")
+    # ax.set_ylabel("Frequencies and Amplitudes")
+    # ax.set_zlabel("Values")
+    # plt.show()
+
+
+show_output_matrix()
