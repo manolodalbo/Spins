@@ -5,6 +5,8 @@ import os
 import spintorch
 import optuna
 from spintorch.utils import tic, toc, stat_cuda
+from spintorch.temporal_model import TModel
+from spintorch.integrating_model import IModel
 
 
 def create_solver(batch_size, num_probes):
@@ -37,7 +39,7 @@ def objective(trial):
     Bt = 0.01  # excitation field amplitude (T)
     # learning_rate = trial.suggest_int("lr", 0.0001, 0.1)
     learning_rate = 0.001
-    epochs = 20
+    epochs = 100
     """Directories"""
     basedir = "focus_Ms/"
     plotdir = "plots/" + basedir
@@ -47,44 +49,74 @@ def objective(trial):
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
 
-    model = create_solver(2, 2)
+    film = create_solver(2, 2)
     dev_name = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(dev_name)  # 'cuda' or 'cpu'
     print("Running on", dev)
-    model.to(dev)  # sending model to GPU/CPU
+    film.to(dev)  # sending model to GPU/CPU
     # timesteps_between = trial.suggest_int("timesteps between inputs", 25, 700)
     # timesteps = trial.suggest_int("timesteps", 50, 100)
     # f1 = trial.suggest_int("f1", 0.1e9, 10e9)
     # f2 = trial.suggest_int("f2", 0.1e9, 10e9)
     # f3 = trial.suggest_int("f3", 0.1e9, 10e9)
-    timesteps_between = 300
+    timesteps_between = 50
     timesteps = 200
     f1 = 2e9
     f2 = 3e9
     f3 = 4e9
+    f4 = 1e9
     dt = 20e-12
     t = torch.arange(0, timesteps * dt, dt, device=dev).unsqueeze(0).unsqueeze(2)
     FIRST_INPUT = torch.cat(
         (
             Bt * torch.sin(2 * torch.pi * f1 * t),
-            torch.zeros((1, timesteps_between, 1), device=dev),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
             Bt * torch.sin(2 * torch.pi * f3 * t),
-            torch.zeros((1, 600, 1), device=dev),
+            torch.zeros((1, 500, 1), device=dev),
         ),
         dim=1,
     )
     SECOND_INPUT = torch.cat(
         (
             Bt * torch.sin(2 * torch.pi * f2 * t),
-            torch.zeros((1, timesteps_between, 1), device=dev),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
+            Bt * torch.sin(2 * torch.pi * f4 * t),
             Bt * torch.sin(2 * torch.pi * f3 * t),
-            torch.zeros((1, 600, 1), device=dev),
+            torch.zeros((1, 500, 1), device=dev),
         ),
         dim=1,
     )
     INPUTS = torch.cat((FIRST_INPUT, SECOND_INPUT), dim=0)
-    OUTPUTS = torch.tensor([0, 1]).to(dev)  # desired output
+    OUTPUTS = torch.tensor([[0, 1], [1, 0]], dtype=torch.float32).to(
+        dev
+    )  # desired output
     """Define optimizer and lossfunction"""
+    model = IModel(film, INPUTS.shape[1], 500 + 15 * (200)).to(dev)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     epoch_init = -1
     loss_iter = []
@@ -97,17 +129,21 @@ def objective(trial):
         return (loss.sum() / loss.size()[0]).log10()
 
     for epoch in range(epoch_init + 1, epochs):
-        u = model(INPUTS)[:, :, timesteps + timesteps_between + 500 :].sum(dim=-1)
+        optimizer.zero_grad()
+        # u = model(INPUTS)[:, :, 700:].sum(dim=-1)
         # u = u / u.sum(dim=-1).unsqueeze(-1)
-        loss = my_loss(u, OUTPUTS)
+        # loss = my_loss(u, OUTPUTS)
+        probs = model(INPUTS)
+        print(probs)
+        loss = torch.nn.functional.binary_cross_entropy(probs, OUTPUTS)
         loss.backward()
         optimizer.step()
         loss_iter.append(loss.item())  # store loss values
         # spintorch.plot.plot_loss(loss_iter, plotdir=plotdir, unique_id="first")
-        # print(f"epoch: {epoch} loss:{loss.item()}")
+        print(f"epoch: {epoch} loss:{loss.item()}")
         with torch.no_grad():
             spintorch.plot.geometry(
-                model, plotdir=plotdir + "geometry_recurrent.png", epoch=-1
+                model.film, plotdir=plotdir + "geometry_recurrent.png", epoch=-2
             )
     return loss.item()
 
