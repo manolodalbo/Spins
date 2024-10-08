@@ -19,17 +19,17 @@ class IModel(nn.Module):
 
     def forward(self, inputs):
         outputs = self.film(inputs)
-        plt.figure()
-        plt.plot(outputs[0, 0, :].detach().cpu().numpy())
-        plt.plot(outputs[0, 1, :].detach().cpu().numpy())
+        # plt.figure()
+        # plt.plot(outputs[0, 0, :].detach().cpu().numpy())
+        # plt.plot(outputs[0, 1, :].detach().cpu().numpy())
 
-        plt.savefig("one.png")
-        plt.close()
-        plt.figure()
-        plt.plot(outputs[1, 0, :].squeeze().detach().cpu().numpy())
-        plt.plot(outputs[1, 1, :].squeeze().detach().cpu().numpy())
-        plt.savefig("two.png")
-        plt.close()
+        # plt.savefig("one.png")
+        # plt.close()
+        # plt.figure()
+        # plt.plot(outputs[1, 0, :].squeeze().detach().cpu().numpy())
+        # plt.plot(outputs[1, 1, :].squeeze().detach().cpu().numpy())
+        # plt.savefig("two.png")
+        # plt.close()
         outputs = outputs[:, :, self.end_first :]
         buckets = outputs.view(
             outputs.shape[0],

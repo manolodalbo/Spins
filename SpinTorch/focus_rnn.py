@@ -39,7 +39,7 @@ def objective(trial):
     Bt = 0.01  # excitation field amplitude (T)
     # learning_rate = trial.suggest_int("lr", 0.0001, 0.1)
     learning_rate = 0.001
-    epochs = 100
+    epochs = 50
     """Directories"""
     basedir = "focus_Ms/"
     plotdir = "plots/" + basedir
@@ -59,7 +59,6 @@ def objective(trial):
     # f1 = trial.suggest_int("f1", 0.1e9, 10e9)
     # f2 = trial.suggest_int("f2", 0.1e9, 10e9)
     # f3 = trial.suggest_int("f3", 0.1e9, 10e9)
-    timesteps_between = 50
     timesteps = 200
     f1 = 2e9
     f2 = 3e9
@@ -70,12 +69,6 @@ def objective(trial):
     FIRST_INPUT = torch.cat(
         (
             Bt * torch.sin(2 * torch.pi * f1 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
             Bt * torch.sin(2 * torch.pi * f4 * t),
             Bt * torch.sin(2 * torch.pi * f4 * t),
             Bt * torch.sin(2 * torch.pi * f4 * t),
@@ -100,12 +93,6 @@ def objective(trial):
             Bt * torch.sin(2 * torch.pi * f4 * t),
             Bt * torch.sin(2 * torch.pi * f4 * t),
             Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
-            Bt * torch.sin(2 * torch.pi * f4 * t),
             Bt * torch.sin(2 * torch.pi * f3 * t),
             torch.zeros((1, 500, 1), device=dev),
         ),
@@ -116,8 +103,23 @@ def objective(trial):
         dev
     )  # desired output
     """Define optimizer and lossfunction"""
-    model = IModel(film, INPUTS.shape[1], 500 + 15 * (200)).to(dev)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    model = TModel(film, INPUTS.shape[1], 500 + 9 * (timesteps)).to(dev)
+    optimizer = torch.optim.Adam(
+        [
+            {
+                "params": model.output_matrix,
+                "lr": 0.1,
+            },  # Try a much larger learning rate
+            {
+                "params": [
+                    param
+                    for name, param in model.named_parameters()
+                    if name != "output_matrix"
+                ],
+                "lr": 0.001,
+            },
+        ]
+    )
     epoch_init = -1
     loss_iter = []
     """Train the network"""
@@ -143,8 +145,11 @@ def objective(trial):
         print(f"epoch: {epoch} loss:{loss.item()}")
         with torch.no_grad():
             spintorch.plot.geometry(
-                model.film, plotdir=plotdir + "geometry_recurrent.png", epoch=-2
+                model.film,
+                plotdir=plotdir + "geometry_9_between_recurrent.png",
+                epoch=-2,
             )
+            spintorch.plot.plot_loss(loss_iter, plotdir, "9between_regression_new_t200")
     return loss.item()
 
 

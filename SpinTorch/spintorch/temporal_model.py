@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import matplotlib.pyplot as plt
 
 
 class TModel(nn.Module):
@@ -7,8 +8,8 @@ class TModel(nn.Module):
         super(TModel, self).__init__()
         self.film = film
         self.output_matrix = nn.Parameter(
-            torch.normal(torch.zeros(2, (input_size - end_first) // 10), std=0.01)
-        ).to("cuda")
+            torch.normal(torch.zeros(2, (input_size - end_first) // 25), std=0.01)
+        )
         self.input_size = input_size
         self.end_first = end_first
         self.number_of_buckets = (input_size - end_first) // 20
@@ -16,12 +17,44 @@ class TModel(nn.Module):
 
     def forward(self, inputs):
         output = self.film(inputs)
+        plt.figure()
+        plt.plot(output[0, :, self.end_first :].detach().cpu().numpy())
+        plt.savefig("first_output.png")
+        plt.close()
+        plt.figure()
+        plt.plot(output[0, :, self.end_first :].detach().cpu().numpy())
+        plt.savefig("second_output.png")
+        plt.close()
+        plt.figure()
+        plt.plot(self.output_matrix[0, :].detach().cpu().numpy())
+        plt.savefig("first_output_matrix.png")
+        plt.close()
+        plt.figure()
+        plt.plot(self.output_matrix[1, :].detach().cpu().numpy())
+        plt.savefig("second_output_matrix.png")
+        plt.close()
         bucketed_output = self.bucket(output[:, :, self.end_first :])
+        plt.figure()
+        plt.plot(bucketed_output[0, 0, :].detach().cpu().numpy())
+        plt.savefig("buckets_one_one.png")
+        plt.close()
+        plt.figure()
+        plt.plot(bucketed_output[0, 1, :].detach().cpu().numpy())
+        plt.savefig("buckets_one_two.png")
+        plt.close()
+        plt.figure()
+        plt.plot(bucketed_output[1, 0, :].detach().cpu().numpy())
+        plt.savefig("buckets_two_one.png")
+        plt.close()
+        plt.figure()
+        plt.plot(bucketed_output[1, 1, :].detach().cpu().numpy())
+        plt.savefig("buckets_two_two.png")
+        plt.close()
         distances = self.euclidean_distance(bucketed_output.flatten(2)).squeeze()
-        probs = nn.functional.softmax(distances, dim=-1)
+        probs = nn.functional.softmax(1 / distances, dim=-1)
         return probs
 
-    def bucket(self, outputs, t_per_bucket=20):
+    def bucket(self, outputs, t_per_bucket=25):
         buckets = outputs.view(
             outputs.shape[0],
             outputs.shape[1],
@@ -32,11 +65,11 @@ class TModel(nn.Module):
         freq_norm = (freq_buckets - freq_buckets.mean()) / freq_buckets.std()
         amp_buckets = buckets.sum(dim=-1)
         amp_normalized = (amp_buckets - amp_buckets.mean()) / amp_buckets.std()
-        full_output = torch.cat(
-            [amp_normalized.squeeze(0).unsqueeze(2), freq_norm.squeeze(0).unsqueeze(2)],
-            dim=2,
-        )
-        return full_output
+        # full_output = torch.cat(
+        #     [amp_normalized.squeeze(0).unsqueeze(2), freq_norm.squeeze(0).unsqueeze(2)],
+        #     dim=2,
+        # )
+        return amp_normalized
 
     def euclidean_distance(self, outputs):
         """ "
@@ -57,8 +90,8 @@ class TModel(nn.Module):
         # to be fixed because or else all the embeddings could be the same and would still result in 0 loss every time
         # i dont think MSE will work in this case without computing probs later
         # useful bc it gets rid of negatives and punishes terrible guesses
-        square_root = torch.sqrt(distances)
-        return square_root
+        # square_root = torch.sqrt(distances)
+        return distances
 
 
 def extract_average_frequency(signals: torch.Tensor, dt: float):
